@@ -9,6 +9,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "mech.h"
 
 #include "_map.h"
@@ -40,6 +42,7 @@ MechLocomotionClass::MechLocomotionClass(void) :
 	HeadToCoord(COORD_NONE),
 	IsMoving(false)
 {
+	Entity = Replace_Locomotor_Entity(Entity, this, "MechLocomotionClass");
 }
 
 

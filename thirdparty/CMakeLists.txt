@@ -215,6 +215,35 @@ add_subdirectory(SDL)
 
 #
 # ---------------------------------------------------------
+# flecs (entity-component storage; no systems are registered)
+# ---------------------------------------------------------
+#
+if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/flecs/CMakeLists.txt")
+    message(FATAL_ERROR
+        "thirdparty/flecs is empty. Fetch the submodules with:\n"
+        "  git submodule update --init --recursive")
+endif()
+
+# The engine links the static library only; flecs builds a shared one by default.
+set(FLECS_SHARED OFF CACHE BOOL "" FORCE)
+set(FLECS_STATIC ON CACHE BOOL "" FORCE)
+set(FLECS_PIC OFF CACHE BOOL "" FORCE)
+set(FLECS_TESTS OFF CACHE BOOL "" FORCE)
+
+add_subdirectory(flecs)
+
+# Only the core and the C++ API are built: no systems, pipeline, script, JSON,
+# meta, HTTP, or REST add-ons. The definitions are PUBLIC because they change
+# what flecs.h declares, so the library and its one consumer must agree.
+target_compile_definitions(flecs_static PUBLIC
+    FLECS_CUSTOM_BUILD
+    FLECS_CPP
+    FLECS_OS_API_IMPL
+)
+
+
+#
+# ---------------------------------------------------------
 # Solution layout
 # ---------------------------------------------------------
 #

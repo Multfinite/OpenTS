@@ -9,6 +9,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "ptype.h"
 
 #include "ccini.h"
@@ -61,6 +63,7 @@ ParticleTypeClass::ParticleTypeClass(char const * ininame) :
 	NextParticle(PARTICLE_NONE),
 	BehavesLike(BEHAVIOR_NONE)
 {
+	Entity = Replace_Entity(Entity, this, "ParticleTypeClass");
 	ParticleTypes.Add(this);
 	AbstractTypePtrTracker.Add(this);
 	IsSentient = false;

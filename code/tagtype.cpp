@@ -9,6 +9,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "tagtype.h"
 
 #include "ahtoi.h"
@@ -39,6 +41,7 @@ TagTypeClass::TagTypeClass(char const *name) :
 	Persistence(VOLATILE),
 	FirstTrigger(NULL)
 {
+	Entity = Replace_Entity(Entity, this, "TagTypeClass");
 	GivenName = TStringID<48>(IniName);
 
 	HeapID = TagTypes.Count();

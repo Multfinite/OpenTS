@@ -9,6 +9,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "tag.h"
 
 #include "_map.h"
@@ -45,6 +47,7 @@ TagClass::TagClass(TagTypeClass *type) :
 	IsToDie(false),
 	IsCurrentlySprung(false)
 {
+	Entity = Replace_Entity(Entity, this, "TagClass");
 	Tags.Add(this);
 	AbstractTypePtrTracker.Add(this);
 	TriggerPtrTracker.Add(this);

@@ -9,6 +9,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "levitate.h"
 
 #include "_map.h"
@@ -66,6 +68,7 @@ LevitateLocomotionClass::LevitateLocomotionClass(void) :
 	MoveRate(0),
 	Dampen(0)
 {
+	Entity = Replace_Locomotor_Entity(Entity, this, "LevitateLocomotionClass");
 
 }
 

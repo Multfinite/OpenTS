@@ -9,6 +9,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "blight.h"
 
 #include "_logic.h"
@@ -60,6 +62,7 @@ BuildingLightClass::BuildingLightClass(TechnoClass * owner) :
 	Target(NULL),
 	Owner(owner)
 {
+	Entity = Replace_Entity(Entity, this, "BuildingLightClass");
 	BuildingLights.Add(this);
 	if (owner != NULL) {
 		Init_Rotation_Arc(owner);

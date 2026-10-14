@@ -9,6 +9,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "tiberium.h"
 
 #include "_map.h"
@@ -68,6 +70,7 @@ TiberiumClass::TiberiumClass(char const * ininame) :
 	GrowthState(NULL),
 	GrowthTimer()
 {
+	Entity = Replace_Entity(Entity, this, "TiberiumClass");
 	HeapID = (TiberiumType)Tiberiums.Count();
 	Tiberiums.Add(this);
 	Debris.Clear();

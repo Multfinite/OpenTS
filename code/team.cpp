@@ -72,6 +72,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "team.h"
 
 #include "_map.h"
@@ -299,6 +301,7 @@ TeamClass::TeamClass(TeamTypeClass const * type, HouseClass * owner, void * unkn
 	IsRegrouping(false),
 	NeedsReinforcement(false)
 {
+	Entity = Replace_Entity(Entity, this, "TeamClass");
 	//assert(Class);
 
 	Teams.Add(this);

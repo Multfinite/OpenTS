@@ -49,6 +49,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "bullet.h"
 
 #include "_convert.h"
@@ -135,6 +137,7 @@ BulletClass::BulletClass(void) :
 	AnimFrame(0),
 	AnimRate(0)
 {
+	Entity = Replace_Entity(Entity, this, "BulletClass");
 	Create_ID();
 	Bullets.Add(this);
 }

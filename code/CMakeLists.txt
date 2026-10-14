@@ -196,6 +196,10 @@ target_compile_definitions(OpenTS PRIVATE
     NOMINMAX
 )
 
+if(NOT OPENTS_EC)
+    target_compile_definitions(OpenTS PRIVATE OPENTS_EC_DISABLED)
+endif()
+
 #
 # ---------------------------------------------------------
 # Windows libraries and linker options
@@ -223,6 +227,7 @@ target_link_libraries(OpenTS PRIVATE
     lzo
     RmlUi::Core
     imgui
+    flecs_static
     SDL3::SDL3-static
     comctl32
     dbghelp

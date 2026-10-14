@@ -46,6 +46,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "terrtype.h"
 
 #include "_map.h"
@@ -124,6 +126,7 @@ TerrainTypeClass::TerrainTypeClass(char const * ininame) :
 	Occupy(NULL)
 
 {
+	Entity = Replace_Entity(Entity, this, "TerrainTypeClass");
 	Create_ID();
 	IsSentient = true;
 	IsStealthy = true;

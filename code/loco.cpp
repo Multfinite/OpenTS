@@ -10,6 +10,7 @@
 #include "always.h"
 
 #include "loco.h"
+#include "flecs/world.h"
 
 #include "_map.h"
 #include "_tactica.h"
@@ -41,6 +42,7 @@
 /// <remarks>Link_To_Object must be called before the locomotor can be asked to do anything
 /// useful.</remarks>
 LocomotionClass::LocomotionClass(void) :
+	Entity(0),
 	LinkedTo(NULL),
 	IsPowered(true),
 	Dirty(true)

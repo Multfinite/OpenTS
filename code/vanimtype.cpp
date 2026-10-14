@@ -9,6 +9,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "vanimtype.h"
 
 #include "animtype.h"
@@ -63,6 +65,7 @@ VoxelAnimTypeClass::VoxelAnimTypeClass(char const * ininame) :
 	AttachedSystem(NULL),
 	IsTiberium(false)
 {
+	Entity = Replace_Entity(Entity, this, "VoxelAnimTypeClass");
 	Create_ID();
 	IsLegalTarget = false;
 	IsSentient = true;

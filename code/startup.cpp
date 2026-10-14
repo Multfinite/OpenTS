@@ -75,6 +75,7 @@
 #include "empulse.h"
 #include "except.h"
 #include "factory.h"
+#include "flecs/world.h"
 #include "fly.h"
 #include "fog.h"
 #include "gamedirs.h"
@@ -1049,3 +1050,4 @@ void Emergency_Exit(void)
 
 	Prog_End();
 }
+

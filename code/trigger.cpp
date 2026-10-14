@@ -44,6 +44,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "trigger.h"
 
 #include "ccrand.h"
@@ -85,6 +87,7 @@ TriggerClass::TriggerClass(TriggerTypeClass * trigtype) :
 	IsActive(true),
 	Timer(0)
 {
+	Entity = Replace_Entity(Entity, this, "TriggerClass");
 	AbstractTypePtrTracker.Add(this);
 	TriggerPtrTracker.Add(this);
 	Triggers.Add(this);

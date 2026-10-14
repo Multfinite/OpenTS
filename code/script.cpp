@@ -9,6 +9,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "script.h"
 
 #include "_script.h"
@@ -37,6 +39,7 @@ ScriptClass::ScriptClass(ScriptTypeClass *type):
 	Class(type),
 	CurrentLineNumber(-1)
 {
+	Entity = Replace_Entity(Entity, this, "ScriptClass");
 	Scripts.Add(this);
 }
 
@@ -181,6 +184,7 @@ ScriptTypeClass::ScriptTypeClass(char const *name) :
 	Scope(SCOPE_LOCAL),
 	MissionCount(0)
 {
+	Entity = Replace_Entity(Entity, this, "ScriptTypeClass");
 	ScriptTypes.Add(this);
 	HeapID = ScriptTypes.ID(this);
 }

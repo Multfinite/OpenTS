@@ -9,6 +9,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "light.h"
 
 #include "_map.h"
@@ -51,6 +53,7 @@ LightSourceClass::LightSourceClass(Coord coord, int visibility, int intensity, i
 	Visibility(visibility),
 	IsEnabled(false)
 {
+	Entity = Replace_Entity(Entity, this, "LightSourceClass");
 	LightSources.Add(this);
 }
 
@@ -70,6 +73,7 @@ LightSourceClass::LightSourceClass(void) :
 	Visibility(0),
 	IsEnabled(false)
 {
+	Entity = Replace_Entity(Entity, this, "LightSourceClass");
 	LightSources.Add(this);
 }
 
