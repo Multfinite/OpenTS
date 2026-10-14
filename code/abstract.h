@@ -41,6 +41,8 @@
 
 #include "persist.h"
 
+#include "flecs/id.hh"
+
 class AbstractTypeClass;
 class CRCEngine;
 class SaveStreamClass;

@@ -58,6 +58,7 @@
 /// </summary>
 AbstractClass::AbstractClass(void) :
 	ID(-1),
+	Entity(0),
 	Dirty(false)
 {
 }
