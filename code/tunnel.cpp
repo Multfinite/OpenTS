@@ -9,6 +9,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "tunnel.h"
 
 #include "_map.h"
@@ -46,6 +48,7 @@ TunnelLocomotionClass::TunnelLocomotionClass(void) :
 	DestinationCoord(COORD_NONE),
 	IsUnderground(false)
 {
+	Entity = Replace_Locomotor_Entity(Entity, this, "TunnelLocomotionClass");
 }
 
 

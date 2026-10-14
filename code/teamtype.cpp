@@ -56,6 +56,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "teamtype.h"
 
 #include "_rules.h"
@@ -164,6 +166,7 @@ TeamTypeClass::TeamTypeClass(char const * name) :
 	IsBaseDefense(false),
 	OnlyTargetHouseEnemy(false)
 {
+	Entity = Replace_Entity(Entity, this, "TeamTypeClass");
 	TeamTypes.Add(this);
 
 	HeapID = TeamTypes.ID(this);

@@ -42,6 +42,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "super.h"
 
 #include "_map.h"
@@ -94,6 +96,7 @@ SuperClass::SuperClass(void) :
 	IsSuspended(false),
 	ChargeDrainState(SUSPENDED)
 {
+	Entity = Replace_Entity(Entity, this, "SuperClass");
 	SuperWeapons.Add(this);
 }
 
@@ -130,6 +133,7 @@ SuperClass::SuperClass(SuperWeaponTypeClass * type, HouseClass * owner) :
 	IsSuspended(false),
 	ChargeDrainState(SUSPENDED)
 {
+	Entity = Replace_Entity(Entity, this, "SuperClass");
 	Create_ID();
 	SuperWeapons.Add(this);
 	AbstractTypePtrTracker.Add(this);

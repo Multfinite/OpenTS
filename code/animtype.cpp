@@ -40,6 +40,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "animtype.h"
 
 #include "_mixfile.h"
@@ -153,6 +155,7 @@ AnimTypeClass::AnimTypeClass(char const *ininame) :
 	IsReverse(false),
 	IsShouldFogRemove(true)
 {
+	Entity = Replace_Entity(Entity, this, "AnimTypeClass");
 	Create_ID();
 	IsSentient = true;
 	IsStealthy = true;

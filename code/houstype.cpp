@@ -41,6 +41,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "houstype.h"
 
 #include "ccini.h"
@@ -89,6 +91,7 @@ HouseTypeClass::HouseTypeClass(char const * ininame) :
 	IsWallOwner(true),
 	IsSmartAI(false)
 {
+	Entity = Replace_Entity(Entity, this, "HouseTypeClass");
 	Create_ID();
 	Suffix[0] = '\0';
 	HouseTypes.Add(this);

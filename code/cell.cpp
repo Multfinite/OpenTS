@@ -76,6 +76,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "cell.h"
 
 #include "_alpha.h"
@@ -318,6 +320,7 @@ CellClass::CellClass(void) :
 	Elevation(0),
 	AdjacentObjectCount(0)
 {
+	Entity = Replace_Entity(Entity, this, "CellClass");
 	Create_ID();
 	Flag.Composite = 0;
 	BridgeFlag.Composite = 0;

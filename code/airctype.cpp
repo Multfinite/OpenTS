@@ -47,6 +47,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "airctype.h"
 
 #include "_mixfile.h"
@@ -88,6 +90,7 @@ AircraftTypeClass::AircraftTypeClass(char const * ininame) :
 	IsCarryall(false),
 	HeapID(AIRCRAFT_NONE)
 {
+	Entity = Replace_Entity(Entity, this, "AircraftTypeClass");
 	Create_ID();
 
 	AircraftTypes.Add(this);

@@ -9,6 +9,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "waypoint.h"
 
 #include "crc.h"
@@ -121,6 +123,7 @@ WaypointPathClass::WaypointPathClass(void) :
 	CurrentWaypoint(-1),
 	Waypoints()
 {
+	Entity = Replace_Entity(Entity, this, "WaypointPathClass");
 	WaypointPaths.Add(this);
 }
 
@@ -136,6 +139,7 @@ WaypointPathClass::WaypointPathClass(int index) :
 	CurrentWaypoint(-1),
 	Waypoints()
 {
+	Entity = Replace_Entity(Entity, this, "WaypointPathClass");
 	if (index >= 0 && index < 12) {
 		WaypointPaths.Add(this);
 	}

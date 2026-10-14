@@ -9,6 +9,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "particle.h"
 
 #include "_alpha.h"
@@ -90,6 +92,7 @@ ParticleClass::ParticleClass(ParticleTypeClass const * type, Coord const & origi
 	WasSaved(false),
 	IsToDie(false)
 {
+	Entity = Replace_Entity(Entity, this, "ParticleClass");
 	Create_ID();
 	Particles.Add(this);
 
@@ -178,6 +181,7 @@ ParticleClass::ParticleClass(void) :
 	WasSaved(false),
 	IsToDie(false)
 {
+	Entity = Replace_Entity(Entity, this, "ParticleClass");
 	Particles.Add(this);
 }
 

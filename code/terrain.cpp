@@ -54,6 +54,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "terrain.h"
 
 #include "_convert.h"
@@ -227,6 +229,7 @@ TerrainClass::TerrainClass(TerrainTypeClass const * type, Cell const & cell) :
 	Unused2(0),
 	RenderPixelPos(0,0)
 {
+	Entity = Replace_Entity(Entity, this, "TerrainClass");
 	Create_ID();
 	Strength = Class->MaxStrength;
 	if (cell != CELL_NONE) {
@@ -256,6 +259,7 @@ TerrainClass::TerrainClass(void) :
 	Unused2(0),
 	RenderPixelPos(0,0)
 {
+	Entity = Replace_Entity(Entity, this, "TerrainClass");
 	Terrains.Add(this);
 	TargetTracker.Add_Index(Fetch_ID(), this);
 }

@@ -34,6 +34,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "fly.h"
 
 #include "_map.h"
@@ -100,6 +102,7 @@ FlyLocomotionClass::FlyLocomotionClass(void) :
 	Riser(0),
 	IsElevating(false)
 {
+	Entity = Replace_Locomotor_Entity(Entity, this, "FlyLocomotionClass");
 }
 
 

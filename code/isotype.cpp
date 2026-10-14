@@ -13,6 +13,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "isotype.h"
 
 #include "_alpha.h"
@@ -262,6 +264,7 @@ IsometricTileTypeClass::IsometricTileTypeClass(IsometricTileType type, int unkno
 	IsAllowTiberium(false),
 	UseCount(0)
 {
+	Entity = Replace_Entity(Entity, this, "IsometricTileTypeClass");
 	AbstractTypePtrTracker.Add(this);
 	if (!skip_registration) {
 		IsometricTileTypes.Add(this);

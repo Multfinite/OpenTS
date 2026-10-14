@@ -40,6 +40,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "smudge.h"
 
 #include "_map.h"
@@ -83,6 +85,7 @@ SmudgeClass::SmudgeClass(SmudgeTypeClass const * type, Coord const & pos, Houses
 	BASECLASS(),
 	Class((SmudgeTypeClass *)type)
 {
+	Entity = Replace_Entity(Entity, this, "SmudgeClass");
 	Create_ID();
 	Smudges.Add(this);
 	if (pos != COORD_NONE) {

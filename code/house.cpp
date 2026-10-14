@@ -130,6 +130,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "house.h"
 
 #include "_logic.h"
@@ -360,6 +362,7 @@ HouseClass::HouseClass(HouseTypeClass const * type) :
 	EnemyInfantryForcePrediction(0.34f),
 	PowerSurplus(0)
 {
+	Entity = Replace_Entity(Entity, this, "HouseClass");
 	int index;
 
 	Create_ID();

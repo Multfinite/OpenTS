@@ -49,6 +49,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "factory.h"
 
 #include "_rules.h"
@@ -95,6 +97,7 @@ FactoryClass::FactoryClass(void) :
 	IsSuspended(false),
 	IsOnHold(true)
 {
+	Entity = Replace_Entity(Entity, this, "FactoryClass");
 	Create_ID();
 
 	Factories.Add(this);

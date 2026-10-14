@@ -47,6 +47,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "infatype.h"
 
 #include "_map.h"
@@ -104,6 +106,7 @@ InfantryTypeClass::InfantryTypeClass(char const * ininame) :
 	ProneLaunch(false),
 	VoiceComment()
 {
+	Entity = Replace_Entity(Entity, this, "InfantryTypeClass");
 	Create_ID();
 	InfantryTypes.Add(this);
 	HeapID = (InfantryType)InfantryTypes.ID(this);

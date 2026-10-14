@@ -55,6 +55,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "drive.h"
 
 #include "_map.h"
@@ -119,6 +121,7 @@ DriveLocomotionClass::DriveLocomotionClass(void) :
 	TrackNumber(-1),
 	TrackIndex(-1)
 {
+	Entity = Replace_Locomotor_Entity(Entity, this, "DriveLocomotionClass");
 }
 
 

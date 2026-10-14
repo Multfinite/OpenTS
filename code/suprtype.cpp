@@ -9,6 +9,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "suprtype.h"
 
 #include "_map.h"
@@ -78,6 +80,7 @@ SuperWeaponTypeClass::SuperWeaponTypeClass(char const * ininame) :
 	IsPowered(true),
 	IsManualControl(false)
 {
+	Entity = Replace_Entity(Entity, this, "SuperWeaponTypeClass");
 	Create_ID();
 	HeapID = (SuperWeaponType)SuperWeaponTypes.Count();
 	SuperWeaponTypes.Add(this);

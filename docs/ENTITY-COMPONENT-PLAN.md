@@ -1,11 +1,37 @@
 # Entity-component adoption plan (flecs, no systems)
 
-Status: proposal. Nothing in this page describes current behavior. The game
-does not use flecs or an entity-component store today. Each phase below starts
-only after a maintainer agrees to its scope, as
-[Contributing](../CONTRIBUTING.md#before-starting) requires for non-trivial
-work. [Project direction](DIRECTION.md) owns the long-term decision to move
-toward an entity-component architecture; this page owns the adoption sequence.
+Status: proposal, with Phases 0, 1, and 3 implemented on the adoption
+branch and not yet merged. On `main` the game does not use flecs or an
+entity-component store today, and nothing in this page describes behavior
+there. Each remaining phase starts only after a maintainer agrees to its
+scope, as [Contributing](../CONTRIBUTING.md#before-starting) requires for
+non-trivial work. [Project direction](DIRECTION.md) owns the long-term
+decision to move toward an entity-component architecture; this page owns
+the adoption sequence.
+
+Implementation status on the adoption branch:
+
+- Phase 0: done. `cmake/CheckEntityInventory.cmake` runs as the
+  `entityinventory` CTest check and verifies all 65 included classes
+  against `code/flecs/register.cpp` and the constructor attach calls.
+- Phase 1: done. flecs v4.1.6 is a pinned submodule; `code/flecs/`
+  (`id.hh`, `world.h`, `world.cpp`, `components.hh`, `register.cpp`)
+  builds the bridge with `OPENTS_EC` on by default; `tests/flecs`
+  covers attach, tags, parenting, replacement, reset, and shutdown.
+  Verified by compiling and running the harness against the vendored
+  flecs on a Linux toolchain; the four MSVC configurations still need
+  CI or maintainer builds, which are build evidence only.
+- Phase 2: attach half done (the pilot classes are in the Phase 3
+  rollout below). The vertical slice is open: no first feature (D4) has
+  been chosen, so no gameplay component exists yet, by rule 3.
+- Phase 3: done in code. All 65 included classes attach in their
+  constructors (81 constructor bodies) and destroy from
+  `~AbstractClass()` / `~LocomotionClass()`; locomotors parent through
+  `Link_To_Object`. MSVC builds and played checks are still open.
+- Phase 4: starts when a first feature lands by the §7 checklist.
+- Phase 5: partially done (bridge-level leak accounting through
+  `Live_Entity_Count`, reset and failed-destroy tolerance in
+  `tests/flecs`). Played and long-session checks are open.
 
 The plan has three fixed rules:
 
@@ -384,11 +410,8 @@ code/flecs/
   world.cpp    — the only translation unit that includes flecs.hpp.
                     Holds the flecs::world by pointer (PIMPL), creates it
                     lazily on first attach, and implements shutdown.
-  components.hpp — component structs for new features, data only
-                    (grows one struct per feature, §7). The .hpp name is
-                    deliberate for this directory; the structs still
-                    follow the definition-header discipline of
-                    docs/STYLE.md.
+  components.hh — component structs for new features, data only
+                    (grows one struct per feature, §7).
   register.cpp — registers every component and class tag with the
                     world, explicitly, in one function. No static
                     initializers register components.
@@ -404,7 +427,7 @@ Naming follows [Style](STYLE.md): classes `PascalCase` ending in
 `const` to the right, tabs, centered pointer declarators. Component
 structs are not classes in the engine sense; they are named for the data
 (`struct VeterancyGate` style names come from the feature, not from this
-plan) and live in `components.hpp` or a feature's own definition
+plan) and live in `components.hh` or a feature's own definition
 header.
 
 ### 5.2 The entity handle on the object
@@ -572,9 +595,9 @@ are no observers (§1).
 ## 7. How a new feature adds a component (the only way components appear)
 
 After Phase 3, adding a component is a checklist, executed in the
-feature's own change — never as drive-by additions to `components.hpp`:
+feature's own change — never as drive-by additions to `components.hh`:
 
-1. Define a plain struct in `components.hpp` (or the feature's
+1. Define a plain struct in `components.hh` (or the feature's
    definition header). Data only: no virtual functions, no behavior, no
    pointers to game objects except entity IDs or the existing object
    pointers the feature already uses. Say in one comment what the data

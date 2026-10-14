@@ -91,6 +91,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "aircraft.h"
 
 #include "_map.h"
@@ -217,6 +219,7 @@ AircraftClass::AircraftClass(AircraftTypeClass const * type, HouseClass * house)
 	AttacksRemaining(1),
 	IsReadyToCommence(true)
 {
+	Entity = Replace_Entity(Entity, this, "AircraftClass");
 	Create_ID();
 
 	if (Class != NULL) {

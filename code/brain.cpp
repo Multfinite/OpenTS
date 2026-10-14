@@ -9,6 +9,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "brain.h"
 
 #include "crc.h"
@@ -32,6 +34,7 @@ NeuronClass::NeuronClass(void):
 	MyBrain(NULL),
 	CreationFrame(Frame)
 {
+	Entity = Replace_Entity(Entity, this, "NeuronClass");
 	TeamPtrTracker.Add(this);
 	AbstractTypePtrTracker.Add(this);
 }
