@@ -11,9 +11,10 @@ The plan has three fixed rules:
 
 1. **No flecs systems.** No registered system, pipeline, phase, or
    `world.progress()` call runs game logic at any point in this plan.
-2. **Every instance of an existing final game class gets a flecs entity.**
-   "Final" means a leaf of the inherited game-object hierarchy as defined in
-   [Scope](#2-scope-final-classes) — not every leaf class in `code/`.
+2. **Instances of existing final game classes get a flecs entity, except
+   the classes named as excluded in [Scope](#2-scope-final-classes).**
+   "Final" means a leaf of the inherited game-object hierarchy as defined
+   there — not every leaf class in `code/`.
 3. **Components carry only new functionality.** No existing class member
    moves into a component under this plan. The entity is an identity and an
    attachment point; the C++ object keeps owning its current state and
@@ -65,16 +66,24 @@ Measured on the current tree:
 | Classes defined in `code/*.h`, `code/*.hh` | 598 |
 | Leaf classes across the whole tree (UI, files, network, rendering, containers, …) | 541 |
 | Internal (non-leaf) classes in the two game trees | 11 |
-| **Leaf classes in scope** | **71** |
+| Leaf classes in the two game trees (candidates) | 71 |
 | — leaves under `AbstractClass` | 61 |
 | — leaves under `LocomotionClass` | 10 |
+| **Excluded by decision** | **5** |
+| **Classes getting entities** | **65, plus `Tactical` once its open decision is made** |
 
 Creating entities for all 541 leaves would attach flecs to gadget, file,
 blitter, and socket classes that have no game identity, no heap, and no save
-record. They are out of scope. A new game class joins the scope when it
+record. They are out of scope.
+
+Five candidate classes are excluded by decision, not by oversight:
+`AnimClass`, `IsometricTileClass`, `LogicClass`, `TActionClass`, and
+`TEventClass` get no entity (reasons in §3.6 and §8). `Tactical` is the one
+class with no decision yet; it is counted neither in nor out until the
+Phase 0 decision is recorded. A new game class joins the scope when it
 derives from `AbstractClass` or `LocomotionClass` and has no subclass; the
 Phase 0 check fails the build's test run until its row is added to the table
-in §8.
+in §8, as included, excluded, or undecided.
 
 The 11 internal classes get no entity of their own. An instance of
 `UnitClass` is one entity, tagged as a unit — not four entities for
@@ -102,25 +111,29 @@ AbstractClass : IPersistent                          code/abstract.h
 │     │   TerrainType, VoxelAnimType)
 │     └─ TechnoTypeClass → AircraftType, BuildingType, InfantryType, UnitType
 ├─ ObjectClass                                       code/object.h
-│  ├─ 11 direct leaves (Anim, BuildingLight, Bullet, IsometricTile,
+│  ├─ 12 direct leaves (Anim ✗, BuildingLight, Bullet, IsometricTile ✗,
 │  │   Overlay, Particle, ParticleSystem, Smudge, Terrain,
-│  │   VeinholeMonster, VoxelAnim, Wave — 12 counting WaveClass)
+│  │   VeinholeMonster, VoxelAnim, Wave)
 │  └─ MissionClass → RadioClass → TechnoClass
 │        ├─ BuildingClass
 │        └─ FootClass → AircraftClass, InfantryClass, UnitClass
-├─ LayerClass → LogicClass (singleton driver, see §3.6)
+├─ LayerClass → LogicClass ✗ (singleton driver, see §3.6)
 └─ 18 direct leaves (AlphaShape, Cell, EMPulse, Factory, FoggedObject,
-    House, LightSource, Neuron, Script, Super, TAction, TEvent, Tactical,
-    Tag, Team, Trigger, Tube, WaypointPath)
+    House, LightSource, Neuron, Script, Super, TAction ✗, TEvent ✗,
+    Tactical ?, Tag, Team, Trigger, Tube, WaypointPath)
 
 LocomotionClass : IPersistent, ILocomotion           code/loco.h
 └─ Drive, DropPod, Fly, Hover, Jumpjet, Levitate, Mech, Teleport,
-   Tunnel, Walk (10 leaves, each also IPiggyback or IPersistent-owned)
+   Tunnel, Walk (10 leaves; some also implement IPiggyback)
 ```
 
+✗ = excluded by decision, ? = no decision yet (§3.6, §4).
+
 Counts check: 26 type leaves + 12 non-techno object leaves + 4 techno
-leaves + 19 remaining `AbstractClass` leaves (including `LogicClass` and
-`Tactical`) = 61; plus 10 locomotors = 71.
+leaves + 19 remaining `AbstractClass` leaves = 61 candidates; minus the
+5 excluded (`AnimClass`, `IsometricTileClass`, `LogicClass`,
+`TActionClass`, `TEventClass`) = 56, of which `Tactical` is undecided;
+plus 10 locomotors = 65 classes getting entities, or 66 with `Tactical`.
 
 ## 3. Analysis of the current engine
 
@@ -147,7 +160,7 @@ Consequences for the design:
   comparing CRCs across two differently-ordered runs.
 - Mapping direction is one-way: entity → C++ object is stored in the bridge
   component (§5.3); C++ object → entity is stored on the object (§5.2).
-  Nothing outside `code/ecs/` may cache a flecs entity across a frame,
+  Nothing outside `code/flecs/` may cache a flecs entity across a frame,
   because the object it names can be destroyed and the ID recycled. Callers
   re-resolve through the object, or store the object pointer as they do
   today and ask for its entity when needed.
@@ -182,8 +195,8 @@ count is rechecked by the Phase 0 script.
 
 Consequences:
 
-- Entity creation cannot hook one factory. It must hook the one place all
-  71 classes pass through — the leaf constructor — or be driven from the
+- Entity creation cannot hook one factory. It must hook the one place
+  every included class passes through — the leaf constructor — or be driven from the
   heaps after the fact. §5.2 chooses the leaf constructor, following the
   existing `Units.Add(this)` pattern so the new line reads as part of a
   pattern reviewers already know.
@@ -193,34 +206,37 @@ Consequences:
   derive from `AbstractClass`, so they need the matching call in
   `~LocomotionClass()` (`code/loco.cpp`).
 - An attach operation must be idempotent and must tolerate running before
-  startup finishes. Two globals are constructed before any startup code
-  runs: `LogicClass Logic` (`code/_logic.cpp`) and the `CellClass BlubCell`
-  sentinel. The world therefore cannot be created only in
+  startup finishes. The `CellClass BlubCell` sentinel is constructed
+  before any startup code runs, and cells attach (§3.6). (`LogicClass
+  Logic` is also a pre-`main` global, but it is excluded and never
+  attaches.) The world therefore cannot be created only in
   `RegisterClasses()`; §5.1 makes creation lazy and shutdown explicit.
 - Placement construction exists: `MapClass::Init_Cells()` runs
   `new (Array[cellnum]) CellClass` over cells that may already hold a
-  constructed object, without a matching destructor call first. Any design
-  that stores an entity ID inside `CellClass` must define what a second
-  construction over a live ID does. This is one of the two reasons cells
-  are a separate decision gate (§3.6).
+  constructed object, without a matching destructor call first. Cells get
+  entities (§3.6), so attach defines this case directly: constructing
+  over a live entity ID destroys the old entity first and creates a fresh
+  one (§5.3, step 1). No stale component survives a cell reset.
 
 ### 3.3 Creation paths an entity must survive
 
 | Path | Where | What the plan must guarantee |
 | --- | --- | --- |
-| `new XClass(...)` at ~hundreds of sites (`AnimClass` alone has 109) | All of `code/` | The leaf constructor creates the entity; no call site changes. |
+| `new XClass(...)` at hundreds of sites across the included classes | All of `code/` | The leaf constructor creates the entity; no call site changes. |
 | Rules and scenario loading: `Read_INI` chains build the 26 type classes; `Create_One_Of` / `Create_And_Place` (pure virtual on `ObjectTypeClass`) build instances | `code/techtype.cpp`, `code/objtype.h`, per-type `.cpp` | Type entities exist before the first instance asks for its type link. |
 | Save loading: `Create_Object(ClassID)` → constructor → `Load()` → `Post_Load()`, with the object self-attaching to its heap during construction | `code/saveload.cpp` (`Load_Object`, `Load_Vector`), `code/classfactory.cpp` | The entity exists from construction, so `Load` failures already have one; the failed-load path destroys the `unique_ptr`, whose destructor must destroy the entity and leave no bridge entry behind. `Swizzler.Abandon(mark)` already rolls back pointer registrations on failure — the entity must need no equivalent rollback beyond destruction. |
 | Deferred deletion through `ObjectsToDelete` and `IsActive` checks | `code/object.cpp`, `code/logic.cpp` | Destroying an entity while a query loop or `LogicClass::AI()` is on the stack must not invalidate the loop. §5.5 restricts when destruction is allowed and uses flecs deferred mode around explicit loops. |
 | Scenario teardown and restart (`Get_All` tears the scenario down before loading) | `code/saveload.cpp`, scenario code | Every entity of the old scenario is gone before the new one's first object is constructed, or is provably recycled with a new generation. Phase 5 tests a load-after-load cycle. |
 
-Five leaf classes are **not** registered in `RegisterClasses()`
-(`IsometricTileClass`, `LogicClass`, `OverlayClass`, `SmudgeClass`,
+Three included leaf classes are **not** registered in
+`RegisterClasses()` (`OverlayClass`, `SmudgeClass`,
 `VeinholeMonsterClass`). Their class identifiers exist, but saves restore
 them through owning records — cells and the map — not through
 `Load_Object`. Entity creation therefore cannot live in `Create_Object`;
-the constructor is the only hook all five share with the other 66. This is
-the deciding argument for §5.2.
+the constructor is the only hook those three share with every other
+included class. This is the deciding argument for §5.2. (Two more
+unregistered leaves, `IsometricTileClass` and `LogicClass`, are excluded
+anyway, §3.6.)
 
 ### 3.4 Persistence, CRC, and network boundaries
 
@@ -283,7 +299,7 @@ bgfx/SDL pattern:
   sections of `thirdparty/CMakeLists.txt` already document why: macros
   change struct layout. The `flecs` target therefore exports its compile
   definitions `PUBLIC`, and exactly one engine translation unit
-  (`code/ecs/ecsworld.cpp`, §5.1) includes `flecs.hpp`. No other engine
+  (`code/flecs/world.cpp`, §5.1) includes `flecs.hpp`. No other engine
   file includes a flecs header. This keeps the PCH-style build
   (`code/always.h` first in most files) and compile times unchanged
   everywhere else.
@@ -304,13 +320,14 @@ runtime behavior.
 
 | Case | Evidence | Decision required |
 | --- | --- | --- |
-| `CellClass` — 262,144 slots (`MAP_CELL_W × MAP_CELL_H` = 512×512, `code/sun.h`), held as `VectorClass<CellClass*> MapClass::Array`, allocated by `Alloc_Cells`, placement-reconstructed by `Init_Cells`, one global sentinel `BlubCell` | An entity per cell is ~262k entities before any object exists — larger than every other population combined by an order of magnitude. flecs handles this, but the memory and reset cost is unmeasured in this engine. | Gate G-Cell: measure world size, reset time, and per-frame cost with cells included before committing. Alternatives: entities only for cells that carry a new-feature component (sparse attach, constructor does not attach; first component add does), or no cell entities and cells stay addressable only as component *values* (`Cell` coordinates) on other entities. The default in the rollout table is sparse attach. |
-| `IsometricTileClass` — one per isometric tile in `IsometricTiles`, created from `isotype.cpp` | Same shape as cells, smaller count, but not registered for save creation (§3.3). | Gate G-Cell covers tiles too. Default: full attach, measured with cells. |
-| `LogicClass` — leaf under `LayerClass`, but the instance is the global `Logic` that drives every frame | Giving the driver an entity is harmless; treating it as a game object is not. It is never saved (`Logic.Save` saves layer membership, not the driver as an object record) and never destroyed. | Exclude `LogicClass` from attach. Record the exclusion in the Phase 0 table with this reason, so the "every final class" rule has exactly one named exception here and one for `Tactical` below — or attach it and never query for it. Maintainer choice at Phase 0 sign-off; the plan proceeds either way. |
-| `Tactical` — the tactical-map object, held by the global pointer `TacticalMap`, created once | A normal attach works; it is registered and saved. | Full attach, Phase 3 wave D. No exception needed. |
-| Locomotors (10 leaves) — owned as `std::unique_ptr<ILocomotion> FootClass::Locomotion`, created by `Create_Locomotor(ClassID)`, saved as a nested record inside the unit's record | They are not heap objects, have no `AbstractClass` base, and their lifetime is their owner's. A top-level entity per locomotor would outlive nothing and be discoverable by queries that expect game objects. | Gate G-Loco: model each locomotor as a **child entity** of its owner's entity (`ChildOf` pair), created in the locomotor constructor and destroyed in `~LocomotionClass`. Queries for game objects never match children unless a feature asks for the pair explicitly. |
-| `TActionClass`, `TEventClass` — global heaps `Actions`, `Events`, and intrusive lists from `TriggerTypeClass::FirstAction/FirstEvent` | Dual ownership (heap plus list) already exists; the entity adds a third view but owns nothing. | Full attach in wave D; the entity is destroyed from the class destructor, which both owners already funnel through `delete`. |
-| High-churn leaves — `AnimClass` (109 `new` sites), `BulletClass`, `ParticleClass`, `ParticleSystemClass`, `VoxelAnimClass`, `WaveClass` | Entity create/destroy per effect per frame is the main performance risk. flecs recycles IDs, but the cost in this engine is unmeasured. | Wave C starts only after the Phase 2 benchmark (spawn/destroy 10k anims and bullets per frame in the test harness) meets the budget set at Phase 0: no measurable frame-time change in the `_bench` harness on a populated map. If it fails, these classes attach lazily (entity created on first component access) and the table records the change. |
+| `CellClass` — 262,144 slots (`MAP_CELL_W × MAP_CELL_H` = 512×512, `code/sun.h`), held as `VectorClass<CellClass*> MapClass::Array`, allocated by `Alloc_Cells`, placement-reconstructed by `Init_Cells`, one global sentinel `BlubCell` | An entity per cell is ~262k entities before any object exists — larger than every other population combined by an order of magnitude. flecs handles this, but the memory and reset cost is unmeasured in this engine. | **Decided: cells get entities, full attach** — every constructed cell, including `BlubCell`. The cost concern does not change the decision; it changes the evidence required. Wave C does not finish until world size, scenario reset time, and frame cost with 262k cell entities are measured against the Phase 0 budget. Placement reconstruction follows the replace rule in §5.3 step 1. |
+| `IsometricTileClass` — one per isometric tile in `IsometricTiles`, created from `isotype.cpp` | Same shape as cells, smaller count, but not registered for save creation (§3.3). | **Decided: no entities.** Tiles stay reachable through the map and their type entities (wave B) only. A future feature that needs per-tile data reopens this row with its own justification. |
+| `LogicClass` — leaf under `LayerClass`, but the instance is the global `Logic` that drives every frame | Giving the driver an entity is harmless; treating it as a game object is not. It is never saved (`Logic.Save` saves layer membership, not the driver as an object record) and never destroyed. | **Decided: no entity.** The driver is not a game object. The Phase 0 script lists it as excluded so the inventory stays complete. |
+| `Tactical` — the tactical-map object, held by the global pointer `TacticalMap`, created once | A normal attach works; it is registered and saved. | **No decision yet.** Phase 0 records it as undecided; the rollout proceeds without it, and its §8 row is resolved before wave D closes. Nothing may depend on a `Tactical` entity until then. |
+| Locomotors (10 leaves) — owned as `std::unique_ptr<ILocomotion> FootClass::Locomotion`, created by `Create_Locomotor(ClassID)`, saved as a nested record inside the unit's record | They are not heap objects, have no `AbstractClass` base, and their lifetime is their owner's. A top-level entity per locomotor would outlive nothing and be discoverable by queries that expect game objects. | **Decided: locomotors get entities**, modeled as a **child entity** of the owner's entity (`ChildOf` pair), created in the locomotor constructor and destroyed in `~LocomotionClass`. Queries for game objects never match children unless a feature asks for the pair explicitly. |
+| `AnimClass` — `Anims` heap, 109 `new` sites | The highest-churn class in the engine; animations are short-lived visual effects. | **Decided: no entity.** Animations carry no new-feature state under this plan; an effect that needs data attaches it to its owner (`ObjectClass` with `IsAnimAttached`) or its type. Reopens only with a named feature. |
+| `TActionClass`, `TEventClass` — global heaps `Actions`, `Events`, and intrusive lists from `TriggerTypeClass::FirstAction/FirstEvent` | Dual ownership (heap plus list) already exists; the entity would add a third view and own nothing. Trigger behavior is driven through `TriggerClass`/`TriggerTypeClass`, which do get entities. | **Decided: no entities.** Actions and events stay plain records owned by their trigger type. |
+| High-churn leaves that do get entities — `BulletClass`, `ParticleClass`, `ParticleSystemClass`, `VoxelAnimClass`, `WaveClass` | Entity create/destroy per effect per frame is the main performance risk. flecs recycles IDs, but the cost in this engine is unmeasured. `BulletClass` is included by decision despite the churn: bullets are gameplay objects (damage, payback), unlike animations. | Wave C starts only after the Phase 2 benchmark (spawn/destroy 10k bullets and particles per frame in the test harness) meets the budget set at Phase 0: no measurable frame-time change in the `_bench` harness on a populated map. If it fails, these classes attach lazily (entity created on first component access) and the table records the change. |
 | Type classes (26 leaves) — INI-defined prototypes, lifetimes span a scenario, `Create_One_Of` builds instances | The type's entity is the natural home for new type-level data (§7). Instance-to-type is currently `Class_Of()`. | Full attach in wave B. Instances link to the type entity with a `TypeOf` pair (§5.4); nothing copies type data into instances automatically. |
 
 ## 4. Decisions to record before code
@@ -318,8 +335,11 @@ runtime behavior.
 Phase 0 ends with these decisions written into this page (or a linked
 maintainer decision) — not left in a chat log:
 
-- **D1 — Scope.** The 71-class table in §8 is the scope; the derivation
-  script and its test are the mechanism that keeps it current.
+- **D1 — Scope (decided).** The §8 table is the scope: 65 classes get
+  entities, 5 are excluded (`AnimClass`, `IsometricTileClass`,
+  `LogicClass`, `TActionClass`, `TEventClass`), and `Tactical` is
+  undecided. The derivation script and its test keep the inventory
+  current; an exclusion is a row in the table, not a missing class.
 - **D2 — No observers.** §1's observer ban holds through Phase 3. Revisit
   only with a determinism argument.
 - **D3 — Entity storage.** The raw entity ID lives on `AbstractClass`
@@ -329,7 +349,12 @@ maintainer decision) — not left in a chat log:
   on every access and a second lifetime to keep in sync; the member
   costs 8 bytes per object and one definition-only header. Neither is
   serialized.
-- **G-Cell, G-Loco** as in §3.6.
+- **Cells and locomotors (decided).** Full attach for `CellClass`;
+  child entities for locomotors (§3.6). Only the cell cost measurement
+  remains open, as a wave C exit check, not as a decision.
+- **D5 — `Tactical` (open).** Decide before wave D closes whether the
+  tactical-map object gets an entity. The plan does not depend on the
+  answer.
 - **D4 — First component.** Phase 2 needs one real new feature to prove
   the path end to end (INI → type entity → instance entity → explicit
   call site → test). The feature is chosen by maintainers; this plan
@@ -341,27 +366,30 @@ maintainer decision) — not left in a chat log:
 ### 5.1 Layout of the new code
 
 The engine is flat: most of `code/` is one directory, subdirectories
-exist for `audio`, `ui`, `sdl`, `language`, `vqalib`. The ECS bridge is
+exist for `audio`, `ui`, `sdl`, `language`, `vqalib`. The EC bridge is
 one new subdirectory, because its whole purpose is to be the only place
 that includes flecs headers:
 
 ```text
-code/ecs/
-  ecsid.hh        — definition-only: EcsEntityId (uint64_t), the invalid
+code/flecs/
+  id.hh        — definition-only: EntityId (uint64_t), the invalid
                     value, and the class-tag identifiers. Includable from
                     abstract.h without pulling in flecs. Follows the .hh
                     rule in docs/STYLE.md: no static initialization, no
                     nontrivial inline code.
-  ecsworld.h      — EcsWorldClass: the bridge the rest of the engine
+  world.h      — FlecsWorldClass: the bridge the rest of the engine
                     calls. Declares attach, destroy, component access for
                     new-feature code, and the two iteration patterns of
                     §5.5. No flecs types in any signature.
-  ecsworld.cpp    — the only translation unit that includes flecs.hpp.
+  world.cpp    — the only translation unit that includes flecs.hpp.
                     Holds the flecs::world by pointer (PIMPL), creates it
                     lazily on first attach, and implements shutdown.
-  ecscomponents.hh — definition-only component structs for new features
-                    (grows one struct per feature, §7).
-  ecsregister.cpp — registers every component and class tag with the
+  components.hpp — component structs for new features, data only
+                    (grows one struct per feature, §7). The .hpp name is
+                    deliberate for this directory; the structs still
+                    follow the definition-header discipline of
+                    docs/STYLE.md.
+  register.cpp — registers every component and class tag with the
                     world, explicitly, in one function. No static
                     initializers register components.
 ```
@@ -376,16 +404,16 @@ Naming follows [Style](STYLE.md): classes `PascalCase` ending in
 `const` to the right, tabs, centered pointer declarators. Component
 structs are not classes in the engine sense; they are named for the data
 (`struct VeterancyGate` style names come from the feature, not from this
-plan) and live in `ecscomponents.hh` or a feature's own definition
+plan) and live in `components.hpp` or a feature's own definition
 header.
 
 ### 5.2 The entity handle on the object
 
 `AbstractClass` gains one member, declared in `abstract.h` through
-`ecsid.hh` only:
+`id.hh` only:
 
 ```cpp
-EcsEntityId EcsEntity;   // 0 until Attach_Ecs_Entity runs; never saved.
+EntityId Entity;   // 0 until Attach_Entity runs; never saved.
 ```
 
 - It is not added to `AbstractClass::Serialize`, so the save format does
@@ -396,12 +424,12 @@ EcsEntityId EcsEntity;   // 0 until Attach_Ecs_Entity runs; never saved.
   this classification in its change record, with `sizeof` checks in the
   test harness for the pilot classes.
 - `LocomotionClass` gains the same member through the same header.
-- Access is through `EcsWorld` functions (`Entity_Of(object)`), so the
-  raw value never leaves `code/ecs/` except as an opaque ID.
+- Access is through `FlecsWorld` functions (`Entity_Of(object)`), so the
+  raw value never leaves `code/flecs/` except as an opaque ID.
 
 ### 5.3 Attach and destroy
 
-One template in `ecsworld.h`, implemented in `ecsworld.cpp`, does the
+One template in `world.h`, implemented in `world.cpp`, does the
 work. The template parameter is the leaf class, so the entity receives
 the correct class tag without a virtual call during construction (the
 dynamic type is not yet the leaf while base constructors run — which is
@@ -409,21 +437,26 @@ also why attach cannot live in `AbstractClass`'s constructor):
 
 ```cpp
 // In each leaf constructor, beside the existing heap registration:
-Attach_Ecs_Entity<UnitClass>(this);
+Attach_Entity<UnitClass>(this);
 
 // In ~AbstractClass() and ~LocomotionClass(), the only destroy call:
-Destroy_Ecs_Entity(this);
+Destroy_Entity(this);
 ```
 
-`Attach_Ecs_Entity<T>`:
+`Attach_Entity<T>`:
 
-1. Returns at once if the object already has a live entity (placement
-   reconstruction, §3.2 — relevant only if G-Cell chooses full attach).
+1. If the object already holds a live entity, destroys it and creates a
+   fresh one. That makes the placement reconstruction of `CellClass`
+   (§3.2) safe without a destructor call, and makes a doubled attach in
+   one constructor replace rather than duplicate. Attach is therefore
+   the last registration line of each leaf constructor, after any
+   component the constructor itself sets.
 2. Creates the world on first use (function-local initialization inside
-   `ecsworld.cpp`, with no flecs state of its own at static-init time, so
-   `Logic` and `BlubCell` constructing before `main` create the world on
+   `world.cpp`, with no flecs state of its own at static-init time, so
+   the `CellClass BlubCell` sentinel (a cell, so it attaches) constructing
+   before `main` creates the world on
    demand rather than depending on startup order — and the world is
-   intentionally leaked unless `Shutdown_Ecs_World()` runs first, so
+   intentionally leaked unless `Shutdown_Flecs_World()` runs first, so
    static destruction order cannot destroy entities into a dead world).
 3. Creates the entity, adds the tag registered for `T`, and sets the one
    infrastructure component every entity carries:
@@ -436,7 +469,7 @@ Destroy_Ecs_Entity(this);
    new functionality": it holds no game state, duplicates no member, and
    exists so a query result can reach the C++ object. Locomotor children
    carry the matching `LegacyLocomotionLink`. Both are registered in
-   `ecsregister.cpp`, are never saved, and are never read by simulation
+   `register.cpp`, are never saved, and are never read by simulation
    code except to resolve the object.
 4. For instances of `ObjectClass`, adds the `TypeOf` pair of §5.4 when
    `Class_Of()` is already set at attach time; where a constructor sets
@@ -444,7 +477,7 @@ Destroy_Ecs_Entity(this);
    from the place that sets it. Phase 0 lists, per pilot class, which of
    the two applies.
 
-`Destroy_Ecs_Entity` destroys the entity (which removes all its
+`Destroy_Entity` destroys the entity (which removes all its
 components and pairs), clears the member to 0, and tolerates a 0 or a
 missing world. It runs from the base destructor, after every heap and
 tracker removal in the leaf destructor has already happened, so no
@@ -452,14 +485,14 @@ legacy code can observe a half-destroyed pairing.
 
 World reset between scenarios needs no separate sweep: scenario teardown
 already `delete`s every heap object, and each destructor destroys its
-entity. `Reset_Ecs_World()` exists for tests and for the failed-load
+entity. `Reset_Flecs_World()` exists for tests and for the failed-load
 path, and asserts in Debug that it is called only when the bridge holds
 no live links.
 
 ### 5.4 Class tags, type links, and prefabs
 
 - Each final class registers one empty tag component, named after the
-  class (`UnitTag`, `BuildingTag`, …), in `ecsregister.cpp`. Tags let a
+  class (`UnitTag`, `BuildingTag`, …), in `register.cpp`. Tags let a
   feature ask "all entities whose object is a `UnitClass`" without a
   C++ cast, and they make the Phase 0 inventory testable: the test
   creates one instance per registered class (where a test constructor
@@ -505,8 +538,8 @@ working from the list. The sort is the price of leaving heap order; it
 is paid visibly at the call site, not hidden in the bridge.
 
 Creation and destruction during either pattern go through flecs
-deferred mode scoped to the loop (`Defer_Ecs_Changes` RAII in
-`ecsworld.h`), mirroring the `ObjectsToDelete` discipline the engine
+deferred mode scoped to the loop (`Defer_Changes` RAII in
+`world.h`), mirroring the `ObjectsToDelete` discipline the engine
 already uses. No component callback runs during the loop, because there
 are no observers (§1).
 
@@ -539,14 +572,14 @@ are no observers (§1).
 ## 7. How a new feature adds a component (the only way components appear)
 
 After Phase 3, adding a component is a checklist, executed in the
-feature's own change — never as drive-by additions to `ecscomponents.hh`:
+feature's own change — never as drive-by additions to `components.hpp`:
 
-1. Define a plain struct in `ecscomponents.hh` (or the feature's
+1. Define a plain struct in `components.hpp` (or the feature's
    definition header). Data only: no virtual functions, no behavior, no
    pointers to game objects except entity IDs or the existing object
    pointers the feature already uses. Say in one comment what the data
    means and what absence of the component means.
-2. Register it in `ecsregister.cpp`. Registration is explicit and
+2. Register it in `register.cpp`. Registration is explicit and
    ordered; no static initializers.
 3. Decide and record, in the feature's change record: saved or not
    (§6 save rule), simulation-affecting or not (§6 CRC rule), read from
@@ -559,7 +592,7 @@ feature's own change — never as drive-by additions to `ecscomponents.hh`:
 5. Instance runtime data: set it from the existing call site that owns
    the behavior (an `AI()` override, a damage function, a placement
    function) — by name, under Pattern A unless §5.5 allows B.
-6. Add a case to `tests/ecs` (or the feature's harness) covering
+6. Add a case to `tests/flecs` (or the feature's harness) covering
    add/read/remove, absence, save round-trip if saved, and CRC effect
    if simulation-affecting.
 7. Update the manual page and lifecycle record for the feature, as
@@ -573,10 +606,11 @@ type would be one `struct` on `UnitTypeClass` entities, parsed in
 and read in `UnitClass::AI` under Pattern A. No existing member moves;
 units whose type lacks the component behave exactly as before.
 
-## 8. Rollout table (all 71 classes)
+## 8. Rollout table (all 71 candidate classes)
 
-Waves: **P** pilot (Phase 2) · **B** types · **C** object effects ·
-**D** remaining abstracts · **E** locomotors · **G** gated (§3.6).
+Waves: **P** pilot (Phase 2) · **B** types · **C** object effects and
+cells · **D** remaining abstracts · **E** locomotors · **✗** excluded by
+decision · **?** no decision yet (§3.6 records each).
 "Registered" = present in `RegisterClasses()` today.
 
 | Class | Heap / storage | Registered | Wave | Note |
@@ -612,10 +646,10 @@ Waves: **P** pilot (Phase 2) · **B** types · **C** object effects ·
 | `VoxelAnimTypeClass` | `VoxelAnimTypes` | yes | B | |
 | `WarheadTypeClass` | `Warheads` | yes | B | |
 | `WeaponTypeClass` | `Weapons` | yes | B | |
-| `AnimClass` | `Anims` | yes | C | High churn; benchmark gate (§3.6). 109 `new` sites, all covered by the ctor hook. |
+| `AnimClass` | `Anims` | yes | ✗ | Excluded (§3.6): highest churn, no new-feature state. |
 | `BuildingLightClass` | `BuildingLights` | yes | C | |
-| `BulletClass` | `Bullets` | yes | C | High churn; benchmark gate. |
-| `IsometricTileClass` | `IsometricTiles` | **no** | C/G | Restored through the map, not `Load_Object` (§3.3). G-Cell decides full vs sparse. |
+| `BulletClass` | `Bullets` | yes | C | Included by decision (§3.6); high churn, benchmark gate. |
+| `IsometricTileClass` | `IsometricTiles` | **no** | ✗ | Excluded (§3.6). Type entity (wave B) only. |
 | `OverlayClass` | `Overlays` | **no** | C | Restored through cells; ctor hook is the only common path. |
 | `ParticleClass` | `Particles` | yes | C | High churn; benchmark gate. |
 | `ParticleSystemClass` | `ParticleSystems` | yes | C | |
@@ -625,24 +659,24 @@ Waves: **P** pilot (Phase 2) · **B** types · **C** object effects ·
 | `VoxelAnimClass` | `VoxelAnims` | yes | C | High churn; benchmark gate. |
 | `WaveClass` | `Waves` | yes | C | |
 | `AlphaShapeClass` | (spawned per object) | yes | D | Two constructors. |
-| `CellClass` | `MapClass::Array` (262,144) | yes | G | G-Cell decision; default sparse attach. Sentinel `BlubCell` included. |
+| `CellClass` | `MapClass::Array` (262,144) | yes | C | Full attach decided (§3.6), incl. sentinel `BlubCell`; cost measurement is a wave C exit check. |
 | `EMPulseClass` | `EMPulseClass::EMPulses` | yes | D | Static heap member. |
 | `FactoryClass` | `Factories` | yes | D | Also `private StageClass`; attach unchanged. |
 | `FoggedObjectClass` | `FoggyObjects` | yes | D | Five constructors — audit each. |
 | `LightSourceClass` | `LightSources` | yes | D | |
-| `LogicClass` | global `Logic` | **no** | G | §3.6: exclude or attach-and-never-query; Phase 0 decision. |
+| `LogicClass` | global `Logic` | **no** | ✗ | Excluded (§3.6): the frame driver is not a game object. |
 | `NeuronClass` | brain-internal | yes | D | |
 | `ScriptClass` | `Scripts` | yes | D | |
 | `SuperClass` | `SuperWeapons` | yes | D | The superweapon instance (type is wave B). |
-| `TActionClass` | `Actions` + trigger lists | yes | D | Dual ownership (§3.6). |
-| `TEventClass` | `Events` + trigger lists | yes | D | Dual ownership (§3.6). |
-| `Tactical` | global `TacticalMap` | yes | D | Singleton; normal attach. |
+| `TActionClass` | `Actions` + trigger lists | yes | ✗ | Excluded (§3.6). |
+| `TEventClass` | `Events` + trigger lists | yes | ✗ | Excluded (§3.6). |
+| `Tactical` | global `TacticalMap` | yes | ? | No decision yet (§3.6, D5). Row resolved before wave D closes. |
 | `TagClass` | `Tags`, `MapTags`, `LogicTags` | yes | D | One object can sit in several lists; one entity. |
 | `TeamClass` | `Teams` | yes | D | |
 | `TriggerClass` | `Triggers` | yes | D | |
 | `TubeClass` | `Tubes` | yes | D | |
 | `WaypointPathClass` | `WaypointPaths` | yes | D | |
-| `DriveLocomotionClass` | `FootClass::Locomotion` | yes | E | Child entity (G-Loco). |
+| `DriveLocomotionClass` | `FootClass::Locomotion` | yes | E | Child entity (§3.6). |
 | `DropPodLocomotionClass` | `FootClass::Locomotion` | yes | E | Registered as `ClassID_BallisticLocomotion`. |
 | `FlyLocomotionClass` | `FootClass::Locomotion` | yes | E | |
 | `HoverLocomotionClass` | `FootClass::Locomotion` | yes | E | |
@@ -660,7 +694,7 @@ the inventory script) stay separate from behavior changes, per
 [Contributing](../CONTRIBUTING.md#pull-request-workflow). No phase
 changes externally visible behavior; every phase is classified
 **preserved** unless its own change record says otherwise. The bridge is
-behind one build-time switch (`OPENTS_ECS`, default on once Phase 2
+behind one build-time switch (`OPENTS_EC`, default on once Phase 2
 lands; off compiles the bridge to no-ops) so any phase can be backed out
 without touching call sites.
 
@@ -672,7 +706,7 @@ without touching call sites.
 - Audit, per class in §8: every constructor and destructor, every heap
   it joins, the save path (registered, owning-record, or never saved),
   and where `Class_Of()` becomes valid.
-- Record D1–D4 and the G-Cell / G-Loco defaults (§4). Set the Phase 2
+- Record D1–D5 (§4). Set the Phase 2
   performance budget (frame-time and memory) with a maintainer.
 - Exit: §8 verified line by line; decisions written down; a maintainer
   has agreed the scope in the project's usual channel before Phase 1
@@ -682,10 +716,10 @@ without touching call sites.
 
 - Vendor flecs per §3.5 (submodule at a pinned v4.1.x tag, static
   library in `thirdparty/CMakeLists.txt`, notices and license).
-- Add `code/ecs/` with the world created lazily and destroyed by an
+- Add `code/flecs/` with the world created lazily and destroyed by an
   explicit shutdown called from the game's exit path; no class attaches
-  yet. `OPENTS_ECS` switch added, default on.
-- Add `tests/ecs` using `opents_add_test`, following the existing
+  yet. `OPENTS_EC` switch added, default on.
+- Add `tests/flecs` using `opents_add_test`, following the existing
   harnesses: world create/reset/shutdown, entity create/destroy,
   component set/get/remove, tag query, child entities, deferred scope.
   No game assets required, as with every current test.
@@ -696,7 +730,7 @@ without touching call sites.
 
 ### Phase 2 — Pilot: five classes, one real component
 
-- Add `EcsEntity` to `AbstractClass` (§5.2), attach/destroy (§5.3),
+- Add the `Entity` member to `AbstractClass` (§5.2), attach/destroy (§5.3),
   tags and `TypeOf` for the pilot set: `HouseClass`, `UnitClass`,
   `BuildingClass`, `InfantryClass`, `AircraftClass` (§8 wave P), with
   their type classes attached as needed for the pair.
@@ -709,18 +743,18 @@ without touching call sites.
 - Exit: save → load round trip of a game containing pilot objects is
   unchanged (old save loads, new save loads, `tests/save` green);
   `tests/desync`/`tests/syncrec` green unmodified; CRC of a fixed
-  scenario identical with `OPENTS_ECS` on and off; the feature works
+  scenario identical with `OPENTS_EC` on and off; the feature works
   with the component present and is byte-identical in behavior with it
   absent.
 
 ### Phase 3 — Roll out by wave
 
 - Wave B (26 type classes), then wave D (remaining abstracts), then
-  wave C (object effects) behind the Phase 2 benchmark result, then
-  wave E (locomotor children), with G-Cell resolved before wave C
-  finishes because tiles and cells share the measurement.
+  wave C (object effects and cells) behind the Phase 2 benchmark result,
+  then wave E (locomotor children). Cells attach in full in wave C; the
+  262k-entity cost measurement is that wave's exit check (§3.6).
 - One wave per change where practical; a wave touches constructors,
-  `ecsregister.cpp`, and the §8 table only — no behavior changes ride
+  `register.cpp`, and the §8 table only — no behavior changes ride
   along. Each wave re-runs the Phase 2 exit checks.
 - Exit per wave: §8 rows for the wave verified against the Phase 0
   script (every constructor attaches exactly once; base destructor
@@ -733,7 +767,7 @@ without touching call sites.
 - §7 becomes the standing route for new components. This page is
   updated to describe current behavior (the bridge as built, not as
   planned), and DIRECTION.md links here as the owner of the mechanism.
-- The `OPENTS_ECS=OFF` no-op build is re-evaluated: keep it only while
+- The `OPENTS_EC=OFF` no-op build is re-evaluated: keep it only while
   a supported configuration needs it.
 - Exit: documentation describes what shipped; the Phase 0 script runs
   in the test suite (`toolkitheaders`-style, compiler-free) so a new
@@ -760,7 +794,7 @@ without touching call sites.
 | Attach missed in one constructor overload (`FoggedObjectClass` has five) | Object with entity 0; feature silently skips it | Idempotent attach asserted in Debug on first component access; Phase 0 script counts constructors; rollout exit check per wave. |
 | Double destroy (deferred deletion plus explicit `delete`) | flecs destroying a recycled entity owned by a new object | Destroy only from the base destructor; member cleared to 0; generation bits make a stale destroy a no-op mismatch the bridge checks in Debug. |
 | Query order changes a simulation result | Desync that single-player testing misses | Pattern A default; Pattern B sorted; §3.4 CRC rule per component. |
-| Cell/tile entity population blows up memory or reset time | Scenario load regression | G-Cell gate with measurement before commitment; sparse-attach default. |
+| Cell entity population (262k) blows up memory or reset time | Scenario load regression | Full attach is decided; wave C cannot close until world size and reset time are measured within the Phase 0 budget (§3.6). |
 | flecs header macros diverge between translation units | Layout mismatch, heap corruption | One including TU (§3.5); definitions exported `PUBLIC` from the target. |
 | Static-init/destruction order with pre-`main` globals (`Logic`, `BlubCell`) | Crash before startup or at exit | Lazy world creation, intentional leak if shutdown is skipped, no flecs statics in engine code (§5.3). |
 | flecs submodule tag breaks a supported configuration | Build failure on one of four configurations | Pin only after all four build (Phase 1 exit); amalgamation fallback (§3.5). |
@@ -775,25 +809,29 @@ Per change, the narrowest checks first, per
   (commands in [Building](BUILDING.md)). This sandbox cannot run them —
   it has no MSVC — so every phase's build claim waits for a Windows
   build, local or CI (`engine.yml`).
-- Tests: `ctest`, with `tests/ecs` added in Phase 1 and extended per
+- Tests: `ctest`, with `tests/flecs` added in Phase 1 and extended per
   §7; `tests/save`, `tests/desync`, `tests/syncrec`, `tests/spawner`
   and `tests/spawnhouse` are the regression net for Phases 2–3.
 - Runtime: the played checks named in each phase's exit criteria
   (campaign mission, skirmish, save/load, LAN where stated). A build
   result is never presented as runtime evidence.
-- Performance: the `_bench` harness and the `tests/ecs` churn
+- Performance: the `_bench` harness and the `tests/flecs` churn
   benchmark, against the Phase 0 budget, before wave C.
 
 ## 12. Open questions for maintainers
 
 1. D3: is the 8-byte member on `AbstractClass` acceptable, or should
    Phase 2 prototype with the side map first?
-2. G-Cell: full, sparse, or no cell entities — and the same for
-   isometric tiles?
-3. `LogicClass`: named exception, or attach-and-never-query?
-4. D4: which real feature is the Phase 2 vertical slice?
-5. Observers (D2): is the ban permanent, or revisited once Pattern A/B
+2. D5: does `Tactical` get an entity? Decide before wave D closes; the
+   rollout does not depend on the answer.
+3. D4: which real feature is the Phase 2 vertical slice?
+4. Observers (D2): is the ban permanent, or revisited once Pattern A/B
    usage shows where callbacks would actually help?
-6. Should Debug builds name entities (RTTI + ID) for a future flecs
+5. Should Debug builds name entities (RTTI + ID) for a future flecs
    explorer session, accepting the string cost in Debug only?
 
+Decided and closed: cell entities (full attach), no entities for
+`AnimClass`, `IsometricTileClass`, `LogicClass`, `TActionClass`, or
+`TEventClass`, `BulletClass` included, and child entities for
+locomotors (§3.6, §4). Reopening any of these takes a named feature as
+justification, recorded in §8.
