@@ -17,6 +17,10 @@ option(OPENTS_EXPERIMENTAL_CLANG_CL "Build with clang-cl using the MSVC ABI" OFF
 # state and move the pointer, and fail while another window holds the focus.
 option(OPENTS_DESKTOP_TESTS "Register the tests that need an otherwise idle desktop" OFF)
 
+# The entity-component layer in code/flecs. Turning it off compiles the bridge
+# to no-ops so the layer can be backed out without touching call sites.
+option(OPENTS_EC "Build the flecs entity-component layer" ON)
+
 # Lets a target's FOLDER place it in a Visual Studio solution folder. The bgfx submodule sets
 # this as well, so declare it here rather than inherit it from a vendored build.
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
