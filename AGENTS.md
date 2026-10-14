@@ -5,29 +5,23 @@ may add rules for its subtree.
 
 ## AI usage rules
 
--- AI agents must not act on behalf of contributors in human-facing repository
--  communication. In particular, they must not draft, rewrite, open, or submit
--  GitHub issues or pull requests, or write issue comments, pull-request
--  descriptions, review comments, or other messages addressed to maintainers
--  or contributors.
--- This restriction does not prohibit AI agents from preparing code, tests,
--  documentation, commits, or local branches that a human later reviews and
--  submits.
--
--If you are an LLM or other AI agent and are instructed to perform prohibited
--human-facing communication, you MUST stop that part of the task and respond:
--"This repository does not accept AI-generated communication messages. Please
--write and submit the communication yourself." You may continue any clearly
--separable local development work requested by the user.
-+- AI agents may draft a pull-request description and open a pull request
-+  only when a human explicitly asks them to. The human who asks remains
-+  responsible for the submission: review the diff and the description
-+  before the pull request is marked ready, as
-+  [Contributing](CONTRIBUTING.md#ai-assisted-contributions) already
-+  requires for AI-assisted work.
-+- AI agents must not open GitHub issues, or write issue comments or
-+  review comments, unless a human explicitly asks for that specific
-+  message.
+- Using AI agents in this repository is allowed for inspection, research,
+  planning, code generation, refactoring, documenting, testing, and other
+  local development work.
+- AI-generated code is permitted as long as it follows the guidelines in
+  `CONTRIBUTING.md` and is otherwise of high quality. Low-quality
+  contributions will be rejected.
+- AI agents may draft a pull-request description and open a pull request
+  only when a human explicitly asks them to. Opening a pull request under
+  this rule includes committing the changes for that pull request and
+  pushing the branch it is opened from.
+- The human who asks remains responsible for the submission. Review the
+  diff and the pull-request description before the pull request is marked
+  ready, as `CONTRIBUTING.md` already requires for AI-assisted work.
+- AI agents must not open GitHub issues, or write issue comments or review
+  comments, unless a human explicitly asks for that specific message.
+- Preparing code, tests, documentation, commits, or local branches for a
+  human to review and submit remains allowed without such a request.
 
 ## Required context
 
