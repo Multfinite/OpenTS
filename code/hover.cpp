@@ -13,6 +13,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "hover.h"
 
 #include "_map.h"
@@ -56,6 +58,7 @@ HoverLocomotionClass::HoverLocomotionClass(void) :
 	ShoveAccum(0),
 	WasPushed(false)
 {
+	Entity = FlecsWorld.Replace_Locomotor_Entity(Entity, this, "HoverLocomotionClass");
 }
 
 

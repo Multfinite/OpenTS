@@ -9,6 +9,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "campaign.h"
 
 #include "ccini.h"
@@ -34,6 +36,7 @@ CampaignClass::CampaignClass(char const * name) :
 	FinalMovie(VQ_NONE),
 	RequiredAddon(0)
 {
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "CampaignClass");
 	Campaigns.Add(this);
 
 	ScenarioName[0] = '\0';

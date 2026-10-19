@@ -9,6 +9,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "tube.h"
 
 #include "_map.h"
@@ -41,6 +43,7 @@ TubeClass::TubeClass(Cell const &cell, FacingType dir) :
 	EnterDir(dir),
 	Count(0)
 {
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "TubeClass");
 	Create_ID();
 
 	for (int i = 0; i < 100; i++) {

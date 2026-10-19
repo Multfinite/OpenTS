@@ -47,6 +47,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "unittype.h"
 
 #include "_map.h"
@@ -141,6 +143,7 @@ UnitTypeClass::UnitTypeClass(char const * ininame) :
 	HeapID(UNIT_NONE),
 	AltImageFile()
 {
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "UnitTypeClass");
 	Create_ID();
 	Rotation = 32;
 	UnitTypes.Add(this);

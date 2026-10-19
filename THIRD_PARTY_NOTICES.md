@@ -22,6 +22,7 @@ remains under its own license and copyright notices.
 | [FreeType](https://freetype.org)                                   | Font rasterization used by RmlUi          | FTL          |
 | [zlib](https://zlib.net)                                           | Compressed font support, bundled with FreeType | zlib |
 | [Dear ImGui](https://github.com/ocornut/imgui)                     | Developer overlays                        | MIT          |
+| [flecs](https://github.com/SanderMertens/flecs)                    | Entity-component storage                  | MIT          |
 | [stb](https://github.com/nothings/stb)                             | Rectangle packing, text editing, and TrueType headers bundled with Dear ImGui | MIT or Unlicense |
 | [stb_image](https://github.com/nothings/stb)                       | PNG and TGA decoding for the UI, bundled with bimg | MIT or Unlicense |
 | [SDL](https://github.com/libsdl-org/SDL)                           | Window, events, and keyboard and mouse input | zlib      |

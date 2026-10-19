@@ -38,6 +38,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "overlay.h"
 
 #include "_map.h"
@@ -103,6 +105,7 @@ HousesType OverlayClass::ToOwn = HOUSE_NONE;
 OverlayClass::OverlayClass(OverlayTypeClass const * ttype, Cell const & pos, HousesType house) :
 	Class((OverlayTypeClass *)ttype)
 {
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "OverlayClass");
 	assert(Class != NULL);
 
 	Create_ID();

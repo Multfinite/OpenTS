@@ -9,6 +9,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "droppod.h"
 
 #include "_map.h"
@@ -40,6 +42,7 @@ DropPodLocomotionClass::DropPodLocomotionClass(void) :
 	Direction(DPOD_DIR_NE),
 	DestinationCoord(COORD_NONE)
 {
+	Entity = FlecsWorld.Replace_Locomotor_Entity(Entity, this, "DropPodLocomotionClass");
 }
 
 

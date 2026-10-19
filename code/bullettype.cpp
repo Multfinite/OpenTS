@@ -40,6 +40,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "bullettype.h"
 
 #include "_map.h"
@@ -108,6 +110,7 @@ BulletTypeClass::BulletTypeClass(char const * name) :
 	AnimHigh(0),
 	AnimRate(0)
 {
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "BulletTypeClass");
 	Create_ID();
 
 	IsSentient = true;

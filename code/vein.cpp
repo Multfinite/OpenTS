@@ -9,6 +9,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "vein.h"
 
 #include "_map.h"
@@ -77,6 +79,7 @@ VeinholeMonsterClass::VeinholeMonsterClass(void) :
 	IsToPuffGas(false),
 	VeinCount(0)
 {
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "VeinholeMonsterClass");
 	VeinholeMonsters.Add(this);
 	GrowthQueue.Clear();
 	GrowthQueue.Reserve(Rule->MaxVeinholeGrowth);
@@ -109,6 +112,7 @@ VeinholeMonsterClass::VeinholeMonsterClass(Cell const & cell) :
 	IsToPuffGas(NULL),
 	VeinCount(0)
 {
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "VeinholeMonsterClass");
 	Create_ID();
 
 	if (Can_Monster_Go_Here(cell)) {

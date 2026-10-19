@@ -58,6 +58,7 @@
 /// </summary>
 AbstractClass::AbstractClass(void) :
 	ID(-1),
+	Entity(0),
 	Dirty(false)
 {
 }
@@ -68,7 +69,8 @@ AbstractClass::AbstractClass(void) :
 /// </summary>
 AbstractClass::~AbstractClass(void)
 {
-	/// empty
+	FlecsWorld.Destroy_Entity(Entity);
+	Entity = 0;
 }
 
 

@@ -81,6 +81,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "infantry.h"
 
 #include "_bench.h"
@@ -243,6 +245,7 @@ InfantryClass::InfantryClass(InfantryTypeClass const * type, HouseClass * house)
 	WasSelected(false),
 	Fear(FEAR_NONE)
 {
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "InfantryClass");
 	Create_ID();
 	Infantry.Add(this);
 

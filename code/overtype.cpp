@@ -48,6 +48,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "overtype.h"
 
 #include "_convert.h"
@@ -123,6 +125,7 @@ OverlayTypeClass::OverlayTypeClass(char const * ininame) :
 	IsARock(false),
 	IsBuildableOver(false)
 {
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "OverlayTypeClass");
 	Create_ID();
 
 	IsStealthy = true;

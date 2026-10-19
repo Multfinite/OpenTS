@@ -9,6 +9,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "alphashp.h"
 
 #include "_alpha.h"
@@ -47,6 +49,7 @@ AlphaShapeClass::AlphaShapeClass(ObjectClass * owner, int x, int y) :
 	ImageData(NULL),
 	IsToDelete(false)
 {
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "AlphaShapeClass");
 	ShapeSet const * image = (ShapeSet const *)owner->Class_Of()->AlphaImageData;
 	ImageData = image;
 	DrawRect = Rect(x, y, image->Get_Width(), image->Get_Height());
@@ -71,6 +74,7 @@ AlphaShapeClass::AlphaShapeClass(void) :
 	ImageData(NULL),
 	IsToDelete(false)
 {
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "AlphaShapeClass");
 	AlphaShapes.Add(this);
 	ObjectPtrTracker.Add(this);
 

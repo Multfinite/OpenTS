@@ -9,6 +9,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "aitrig.h"
 
 #include "_rules.h"
@@ -75,6 +77,7 @@ AITriggerTypeClass::AITriggerTypeClass(const char *name) :
 	TimesSucceded(0),
 	TimesExecuted(0)
 {
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "AITriggerTypeClass");
 	memset(Params.Data, 0, sizeof(Params.Data));
 
 	AITriggerTypes.Add(this);

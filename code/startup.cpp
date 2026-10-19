@@ -75,6 +75,7 @@
 #include "empulse.h"
 #include "except.h"
 #include "factory.h"
+#include "flecs/world.h"
 #include "fly.h"
 #include "fog.h"
 #include "gamedirs.h"
@@ -997,6 +998,8 @@ void __cdecl Prog_End(void)
 		Scen = NULL;
 	}
 
+	FlecsWorld.Shutdown();
+
 	Unregister_Classes();
 
 	if (LanguageResources) {
@@ -1049,3 +1052,4 @@ void Emergency_Exit(void)
 
 	Prog_End();
 }
+

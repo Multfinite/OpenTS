@@ -9,6 +9,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "wave.h"
 
 #include "_logic.h"
@@ -85,6 +87,7 @@ WaveClass::WaveClass(Coord const & source_coord, Coord const & target_coord, Tec
 	Source(source),
 	AffectedCells(5)
 {
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "WaveClass");
 	Create_ID();
 	Waves.Add(this);
 
@@ -131,6 +134,7 @@ WaveClass::WaveClass(void) :
 	Source(NULL),
 	AffectedCells(5)
 {
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "WaveClass");
 	Waves.Add(this);
 
 	if (!_tables_calculated) {

@@ -13,6 +13,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "teleport.h"
 
 #include "foot.h"
@@ -28,6 +30,7 @@ TeleportLocomotionClass::TeleportLocomotionClass(void) :
 	BASECLASS(),
 	DestinationCoord(COORD_NONE)
 {
+	Entity = FlecsWorld.Replace_Locomotor_Entity(Entity, this, "TeleportLocomotionClass");
 }
 
 

@@ -13,6 +13,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "walk.h"
 
 #include "_map.h"
@@ -49,6 +51,7 @@ WalkLocomotionClass::WalkLocomotionClass(void) :
 	IsProcessingMovement(false),
 	IsReallyMoving(false)
 {
+	Entity = FlecsWorld.Replace_Locomotor_Entity(Entity, this, "WalkLocomotionClass");
 }
 
 

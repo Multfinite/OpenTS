@@ -13,6 +13,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "taskforc.h"
 
 #include "ahtoi.h"
@@ -42,6 +44,7 @@ TaskForceClass::TaskForceClass(char const *name) :
 	ClassCount(0),
 	Scope(SCOPE_LOCAL)
 {
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "TaskForceClass");
 	TaskForces.Add(this);
 
 	for (int i = 0; i < MAX_TEAM_CLASSCOUNT; i++) {
@@ -68,6 +71,9 @@ TaskForceClass::~TaskForceClass(void)
 TaskForceClass::TaskForceClass(TaskForceClass const & that) :
 	BASECLASS(that)
 {
+	// The base copy carried the source's entity ID; the copy gets its own.
+	Entity = 0;
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "TaskForceClass");
 	Group = that.Group;
 	ClassCount = that.ClassCount;
 	Scope = that.Scope;

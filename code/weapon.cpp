@@ -41,6 +41,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "weapon.h"
 
 #include "_rules.h"
@@ -111,6 +113,7 @@ WeaponTypeClass::WeaponTypeClass(char const * ininame) :
 	Sound(),
 	Anim()
 {
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "WeaponTypeClass");
 	for (int i = 0; i < ARRAY_SIZE(BurstDelay); i++) {
 		BurstDelay[i] = -1;
 	}

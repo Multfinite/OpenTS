@@ -46,6 +46,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "smudtype.h"
 
 #include "_map.h"
@@ -94,6 +96,7 @@ SmudgeTypeClass::SmudgeTypeClass(char const * ini) :
 	IsCrater(false),
 	IsScorch(false)
 {
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "SmudgeTypeClass");
 	Create_ID();
 
 	IsStealthy = true;

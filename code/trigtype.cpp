@@ -48,6 +48,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "trigtype.h"
 
 #include "_map.h"
@@ -104,6 +106,7 @@ TriggerTypeClass::TriggerTypeClass(char const * name) :
 	FirstEvent(NULL),
 	FirstAction(NULL)
 {
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "TriggerTypeClass");
 	EventActionPtrTracker.Add(this);
 	AbstractTypePtrTracker.Add(this);
 	HousePtrTracker.Add(this);

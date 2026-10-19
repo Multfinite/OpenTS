@@ -104,6 +104,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "building.h"
 
 #include "_convert.h"
@@ -271,6 +273,7 @@ BuildingClass::BuildingClass(BuildingTypeClass const * type, HouseClass * house)
 	ProduceCashRemaining(0),
 	IsProduceCashStartupPaid(false)
 {
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "BuildingClass");
 	Create_ID();
 
 	for (int i = 0; i < BUILDING_UPGRADE_MAX; i++) {

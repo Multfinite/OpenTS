@@ -9,6 +9,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "psystype.h"
 
 #include "ccini.h"
@@ -54,6 +56,7 @@ ParticleSystemTypeClass::ParticleSystemTypeClass(char const * ininame) :
 	IsLaser(false),
 	OneFrameLight(false)
 {
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "ParticleSystemTypeClass");
 	Create_ID();
 	ParticleSystemTypes.Add(this);
 	IsSentient = true;

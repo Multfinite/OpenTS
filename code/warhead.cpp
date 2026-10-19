@@ -37,6 +37,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "warhead.h"
 
 #include "_warhead.h"
@@ -113,6 +115,7 @@ WarheadTypeClass::WarheadTypeClass(char const * ininame) :
 	IsEMEffect(false),
 	IsVeinhole(false)
 {
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "WarheadTypeClass");
 	Create_ID();
 
 	Warheads.Add(this);

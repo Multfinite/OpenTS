@@ -13,7 +13,8 @@ easier to extend.
 There will be no full rewrite. Changes must keep the engine playable throughout
 the migration. Prefer composition to a deeper inheritance tree, keep new state
 separable from behavior, and avoid adding tight couplings to the existing class
-hierarchy.
+hierarchy. The [entity-component adoption plan](ENTITY-COMPONENT-PLAN.md) owns
+the proposed sequence and its current status.
 
 Portability follows the same incremental approach. Preparatory changes do not
 make a compiler or platform supported; [Building OpenTS](BUILDING.md) lists the

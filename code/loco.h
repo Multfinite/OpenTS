@@ -35,6 +35,10 @@ std::unique_ptr<ILocomotion> Load_Locomotor(SaveStreamClass & stream);
 class LocomotionClass : public IPersistent, public ILocomotion
 {
 	public:
+		// The flecs child entity naming this locomotor, created by its leaf
+		// class constructor. Zero until then; never saved or checksummed.
+		EntityId Entity;
+
 		LocomotionClass(void);
 		virtual ~LocomotionClass(void);
 

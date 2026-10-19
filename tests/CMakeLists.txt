@@ -68,6 +68,7 @@ function(opents_add_test target)
 endfunction()
 
 add_subdirectory(actionids)
+add_subdirectory(flecs)
 add_subdirectory(cpudetect)
 add_subdirectory(gamedirs)
 add_subdirectory(ini)
@@ -121,6 +122,10 @@ endif()
 
 # The script reads the sources directly, so the check needs no compiler and runs in every CI
 # job's ctest step.
+add_test(NAME entityinventory
+    COMMAND "${CMAKE_COMMAND}" -DOPENTS_SOURCE_DIR=${CMAKE_SOURCE_DIR}
+        -P "${CMAKE_SOURCE_DIR}/cmake/CheckEntityInventory.cmake")
+
 add_test(NAME toolkitheaders
     COMMAND "${CMAKE_COMMAND}" -DOPENTS_SOURCE_DIR=${CMAKE_SOURCE_DIR}
         -P "${CMAKE_SOURCE_DIR}/cmake/CheckToolkitHeaders.cmake"

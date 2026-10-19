@@ -9,6 +9,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "jumpjet.h"
 
 #include "_map.h"
@@ -46,6 +48,7 @@ JumpjetLocomotionClass::JumpjetLocomotionClass(void) :
 	CurrentWobble(0.0),
 	IsLanding(false)
 {
+	Entity = FlecsWorld.Replace_Locomotor_Entity(Entity, this, "JumpjetLocomotionClass");
 
 }
 

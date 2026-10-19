@@ -57,6 +57,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "builtype.h"
 
 #include "_map.h"
@@ -345,6 +347,7 @@ BuildingTypeClass::BuildingTypeClass(char const * ininame) :
 	ProduceCashBudget(0),
 	IsProduceCashResetOnCapture(false)
 {
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "BuildingTypeClass");
 	Create_ID();
 	BuildingTypes.Add(this);
 	HeapID = (StructType)BuildingTypes.ID(this);

@@ -9,6 +9,8 @@
 
 #include "always.h"
 
+#include "flecs/world.h"
+
 #include "side.h"
 
 #include "builtype.h"
@@ -42,6 +44,7 @@ SideClass::SideClass(char const * ininame) :
 	AIBaseDefensePlaceholders(2),
 	IsAIBaseDefensesWithWalls(false)
 {
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "SideClass");
 	Create_ID();
 	Sides.Add(this);
 
