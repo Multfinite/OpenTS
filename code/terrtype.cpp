@@ -126,7 +126,7 @@ TerrainTypeClass::TerrainTypeClass(char const * ininame) :
 	Occupy(NULL)
 
 {
-	Entity = Replace_Entity(Entity, this, "TerrainTypeClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "TerrainTypeClass");
 	Create_ID();
 	IsSentient = true;
 	IsStealthy = true;

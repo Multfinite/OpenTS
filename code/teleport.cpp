@@ -30,7 +30,7 @@ TeleportLocomotionClass::TeleportLocomotionClass(void) :
 	BASECLASS(),
 	DestinationCoord(COORD_NONE)
 {
-	Entity = Replace_Locomotor_Entity(Entity, this, "TeleportLocomotionClass");
+	Entity = FlecsWorld.Replace_Locomotor_Entity(Entity, this, "TeleportLocomotionClass");
 }
 
 

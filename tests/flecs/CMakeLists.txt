@@ -7,6 +7,7 @@ opents_add_test(FlecsTest
     NAME flecs
     SOURCES main.cpp
     ENGINE
+        _flecs.cpp
         flecs/world.cpp
         flecs/register.cpp
     LIBRARIES flecs_static

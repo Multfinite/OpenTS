@@ -48,7 +48,7 @@ TunnelLocomotionClass::TunnelLocomotionClass(void) :
 	DestinationCoord(COORD_NONE),
 	IsUnderground(false)
 {
-	Entity = Replace_Locomotor_Entity(Entity, this, "TunnelLocomotionClass");
+	Entity = FlecsWorld.Replace_Locomotor_Entity(Entity, this, "TunnelLocomotionClass");
 }
 
 

@@ -121,7 +121,7 @@ DriveLocomotionClass::DriveLocomotionClass(void) :
 	TrackNumber(-1),
 	TrackIndex(-1)
 {
-	Entity = Replace_Locomotor_Entity(Entity, this, "DriveLocomotionClass");
+	Entity = FlecsWorld.Replace_Locomotor_Entity(Entity, this, "DriveLocomotionClass");
 }
 
 

@@ -42,7 +42,7 @@ MechLocomotionClass::MechLocomotionClass(void) :
 	HeadToCoord(COORD_NONE),
 	IsMoving(false)
 {
-	Entity = Replace_Locomotor_Entity(Entity, this, "MechLocomotionClass");
+	Entity = FlecsWorld.Replace_Locomotor_Entity(Entity, this, "MechLocomotionClass");
 }
 
 

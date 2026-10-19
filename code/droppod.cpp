@@ -42,7 +42,7 @@ DropPodLocomotionClass::DropPodLocomotionClass(void) :
 	Direction(DPOD_DIR_NE),
 	DestinationCoord(COORD_NONE)
 {
-	Entity = Replace_Locomotor_Entity(Entity, this, "DropPodLocomotionClass");
+	Entity = FlecsWorld.Replace_Locomotor_Entity(Entity, this, "DropPodLocomotionClass");
 }
 
 

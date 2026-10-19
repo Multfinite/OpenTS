@@ -34,7 +34,7 @@ NeuronClass::NeuronClass(void):
 	MyBrain(NULL),
 	CreationFrame(Frame)
 {
-	Entity = Replace_Entity(Entity, this, "NeuronClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "NeuronClass");
 	TeamPtrTracker.Add(this);
 	AbstractTypePtrTracker.Add(this);
 }

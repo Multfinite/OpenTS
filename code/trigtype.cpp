@@ -106,7 +106,7 @@ TriggerTypeClass::TriggerTypeClass(char const * name) :
 	FirstEvent(NULL),
 	FirstAction(NULL)
 {
-	Entity = Replace_Entity(Entity, this, "TriggerTypeClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "TriggerTypeClass");
 	EventActionPtrTracker.Add(this);
 	AbstractTypePtrTracker.Add(this);
 	HousePtrTracker.Add(this);

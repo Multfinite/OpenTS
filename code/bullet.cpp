@@ -137,7 +137,7 @@ BulletClass::BulletClass(void) :
 	AnimFrame(0),
 	AnimRate(0)
 {
-	Entity = Replace_Entity(Entity, this, "BulletClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "BulletClass");
 	Create_ID();
 	Bullets.Add(this);
 }

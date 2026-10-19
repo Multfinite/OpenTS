@@ -301,7 +301,7 @@ TeamClass::TeamClass(TeamTypeClass const * type, HouseClass * owner, void * unkn
 	IsRegrouping(false),
 	NeedsReinforcement(false)
 {
-	Entity = Replace_Entity(Entity, this, "TeamClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "TeamClass");
 	//assert(Class);
 
 	Teams.Add(this);

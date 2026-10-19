@@ -68,7 +68,7 @@ LevitateLocomotionClass::LevitateLocomotionClass(void) :
 	MoveRate(0),
 	Dampen(0)
 {
-	Entity = Replace_Locomotor_Entity(Entity, this, "LevitateLocomotionClass");
+	Entity = FlecsWorld.Replace_Locomotor_Entity(Entity, this, "LevitateLocomotionClass");
 
 }
 

@@ -67,7 +67,7 @@ FoggedObjectClass::FoggedObjectClass(void) :
 	Records(),
 	CanDraw(true)
 {
-	Entity = Replace_Entity(Entity, this, "FoggedObjectClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "FoggedObjectClass");
 	FoggyObjects.Add(this);
 }
 
@@ -93,7 +93,7 @@ FoggedObjectClass::FoggedObjectClass(Coord const & coord, OverlayType type, int 
 	Records(),
 	CanDraw(true)
 {
-	Entity = Replace_Entity(Entity, this, "FoggedObjectClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "FoggedObjectClass");
 	CellClass * cellptr = &Map[coord];
 	BoundingRect = Union(cellptr->Overlay_Render_Rect(), cellptr->Overlay_Shadow_Render_Rect());
 	BoundingRect.X += TacticalMap->TacPixelX;
@@ -129,7 +129,7 @@ FoggedObjectClass::FoggedObjectClass(Coord const & coord, SmudgeType type, int d
 	Records(),
 	CanDraw(true)
 {
-	Entity = Replace_Entity(Entity, this, "FoggedObjectClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "FoggedObjectClass");
 	Coord crd;
 	Point2D point;
 	CellClass * cellptr = &Map[coord];
@@ -172,7 +172,7 @@ FoggedObjectClass::FoggedObjectClass(BuildingClass * object, bool fade) :
 	Records(),
 	CanDraw(fade)
 {
-	Entity = Replace_Entity(Entity, this, "FoggedObjectClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "FoggedObjectClass");
 	BoundingRect = object->Get_Render_Rect();
 
 	FoggyObjects.Add(this);
@@ -229,7 +229,7 @@ FoggedObjectClass::FoggedObjectClass(TerrainClass * object) :
 	Records(),
 	CanDraw(true)
 {
-	Entity = Replace_Entity(Entity, this, "FoggedObjectClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "FoggedObjectClass");
 	BoundingRect = object->Get_Render_Rect();
 	BoundingRect.X += TacticalMap->TacPixelX;
 	BoundingRect.Y += TacticalMap->TacPixelY;

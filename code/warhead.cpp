@@ -115,7 +115,7 @@ WarheadTypeClass::WarheadTypeClass(char const * ininame) :
 	IsEMEffect(false),
 	IsVeinhole(false)
 {
-	Entity = Replace_Entity(Entity, this, "WarheadTypeClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "WarheadTypeClass");
 	Create_ID();
 
 	Warheads.Add(this);

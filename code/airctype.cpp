@@ -90,7 +90,7 @@ AircraftTypeClass::AircraftTypeClass(char const * ininame) :
 	IsCarryall(false),
 	HeapID(AIRCRAFT_NONE)
 {
-	Entity = Replace_Entity(Entity, this, "AircraftTypeClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "AircraftTypeClass");
 	Create_ID();
 
 	AircraftTypes.Add(this);

@@ -166,7 +166,7 @@ TeamTypeClass::TeamTypeClass(char const * name) :
 	IsBaseDefense(false),
 	OnlyTargetHouseEnemy(false)
 {
-	Entity = Replace_Entity(Entity, this, "TeamTypeClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "TeamTypeClass");
 	TeamTypes.Add(this);
 
 	HeapID = TeamTypes.ID(this);

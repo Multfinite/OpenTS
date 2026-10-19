@@ -97,7 +97,7 @@ FactoryClass::FactoryClass(void) :
 	IsSuspended(false),
 	IsOnHold(true)
 {
-	Entity = Replace_Entity(Entity, this, "FactoryClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "FactoryClass");
 	Create_ID();
 
 	Factories.Add(this);

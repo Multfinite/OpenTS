@@ -273,7 +273,7 @@ BuildingClass::BuildingClass(BuildingTypeClass const * type, HouseClass * house)
 	ProduceCashRemaining(0),
 	IsProduceCashStartupPaid(false)
 {
-	Entity = Replace_Entity(Entity, this, "BuildingClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "BuildingClass");
 	Create_ID();
 
 	for (int i = 0; i < BUILDING_UPGRADE_MAX; i++) {

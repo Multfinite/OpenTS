@@ -143,7 +143,7 @@ UnitTypeClass::UnitTypeClass(char const * ininame) :
 	HeapID(UNIT_NONE),
 	AltImageFile()
 {
-	Entity = Replace_Entity(Entity, this, "UnitTypeClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "UnitTypeClass");
 	Create_ID();
 	Rotation = 32;
 	UnitTypes.Add(this);

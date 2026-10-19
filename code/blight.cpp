@@ -62,7 +62,7 @@ BuildingLightClass::BuildingLightClass(TechnoClass * owner) :
 	Target(NULL),
 	Owner(owner)
 {
-	Entity = Replace_Entity(Entity, this, "BuildingLightClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "BuildingLightClass");
 	BuildingLights.Add(this);
 	if (owner != NULL) {
 		Init_Rotation_Arc(owner);

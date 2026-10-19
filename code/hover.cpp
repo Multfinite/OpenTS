@@ -58,7 +58,7 @@ HoverLocomotionClass::HoverLocomotionClass(void) :
 	ShoveAccum(0),
 	WasPushed(false)
 {
-	Entity = Replace_Locomotor_Entity(Entity, this, "HoverLocomotionClass");
+	Entity = FlecsWorld.Replace_Locomotor_Entity(Entity, this, "HoverLocomotionClass");
 }
 
 

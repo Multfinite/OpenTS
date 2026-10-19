@@ -125,7 +125,7 @@ OverlayTypeClass::OverlayTypeClass(char const * ininame) :
 	IsARock(false),
 	IsBuildableOver(false)
 {
-	Entity = Replace_Entity(Entity, this, "OverlayTypeClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "OverlayTypeClass");
 	Create_ID();
 
 	IsStealthy = true;

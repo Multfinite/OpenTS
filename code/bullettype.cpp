@@ -110,7 +110,7 @@ BulletTypeClass::BulletTypeClass(char const * name) :
 	AnimHigh(0),
 	AnimRate(0)
 {
-	Entity = Replace_Entity(Entity, this, "BulletTypeClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "BulletTypeClass");
 	Create_ID();
 
 	IsSentient = true;

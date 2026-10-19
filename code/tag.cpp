@@ -47,7 +47,7 @@ TagClass::TagClass(TagTypeClass *type) :
 	IsToDie(false),
 	IsCurrentlySprung(false)
 {
-	Entity = Replace_Entity(Entity, this, "TagClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "TagClass");
 	Tags.Add(this);
 	AbstractTypePtrTracker.Add(this);
 	TriggerPtrTracker.Add(this);

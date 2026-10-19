@@ -221,7 +221,7 @@ UnitClass::UnitClass(UnitTypeClass const * type, HouseClass * house) :
 	IsCompositingToEightBitSurface(false),
 	Charge(0)
 {
-	Entity = Replace_Entity(Entity, this, "UnitClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "UnitClass");
 	Create_ID();
 	Units.Add(this);
 	SecondaryFacing.Set(PrimaryFacing.Current());

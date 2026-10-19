@@ -106,7 +106,7 @@ InfantryTypeClass::InfantryTypeClass(char const * ininame) :
 	ProneLaunch(false),
 	VoiceComment()
 {
-	Entity = Replace_Entity(Entity, this, "InfantryTypeClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "InfantryTypeClass");
 	Create_ID();
 	InfantryTypes.Add(this);
 	HeapID = (InfantryType)InfantryTypes.ID(this);

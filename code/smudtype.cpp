@@ -96,7 +96,7 @@ SmudgeTypeClass::SmudgeTypeClass(char const * ini) :
 	IsCrater(false),
 	IsScorch(false)
 {
-	Entity = Replace_Entity(Entity, this, "SmudgeTypeClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "SmudgeTypeClass");
 	Create_ID();
 
 	IsStealthy = true;

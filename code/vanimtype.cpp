@@ -65,7 +65,7 @@ VoxelAnimTypeClass::VoxelAnimTypeClass(char const * ininame) :
 	AttachedSystem(NULL),
 	IsTiberium(false)
 {
-	Entity = Replace_Entity(Entity, this, "VoxelAnimTypeClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "VoxelAnimTypeClass");
 	Create_ID();
 	IsLegalTarget = false;
 	IsSentient = true;

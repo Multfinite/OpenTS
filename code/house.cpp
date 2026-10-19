@@ -362,7 +362,7 @@ HouseClass::HouseClass(HouseTypeClass const * type) :
 	EnemyInfantryForcePrediction(0.34f),
 	PowerSurplus(0)
 {
-	Entity = Replace_Entity(Entity, this, "HouseClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "HouseClass");
 	int index;
 
 	Create_ID();

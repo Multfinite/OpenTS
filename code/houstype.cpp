@@ -91,7 +91,7 @@ HouseTypeClass::HouseTypeClass(char const * ininame) :
 	IsWallOwner(true),
 	IsSmartAI(false)
 {
-	Entity = Replace_Entity(Entity, this, "HouseTypeClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "HouseTypeClass");
 	Create_ID();
 	Suffix[0] = '\0';
 	HouseTypes.Add(this);

@@ -123,7 +123,7 @@ WaypointPathClass::WaypointPathClass(void) :
 	CurrentWaypoint(-1),
 	Waypoints()
 {
-	Entity = Replace_Entity(Entity, this, "WaypointPathClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "WaypointPathClass");
 	WaypointPaths.Add(this);
 }
 
@@ -139,7 +139,7 @@ WaypointPathClass::WaypointPathClass(int index) :
 	CurrentWaypoint(-1),
 	Waypoints()
 {
-	Entity = Replace_Entity(Entity, this, "WaypointPathClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "WaypointPathClass");
 	if (index >= 0 && index < 12) {
 		WaypointPaths.Add(this);
 	}

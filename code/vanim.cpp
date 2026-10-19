@@ -63,7 +63,7 @@ VoxelAnimClass::VoxelAnimClass(VoxelAnimTypeClass const * type, Coord const & co
 	IsInvisible(false),
 	ECCounter(0)
 {
-	Entity = Replace_Entity(Entity, this, "VoxelAnimClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "VoxelAnimClass");
 	Create_ID();
 	ECCounter = Class->Duration;
 	VoxelAnims.Add(this);
@@ -127,7 +127,7 @@ VoxelAnimClass::VoxelAnimClass(void) :
 	IsInvisible(false),
 	ECCounter(0)
 {
-	Entity = Replace_Entity(Entity, this, "VoxelAnimClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "VoxelAnimClass");
 	Create_ID();
 	VoxelAnims.Add(this);
 }

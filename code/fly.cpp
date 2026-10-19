@@ -102,7 +102,7 @@ FlyLocomotionClass::FlyLocomotionClass(void) :
 	Riser(0),
 	IsElevating(false)
 {
-	Entity = Replace_Locomotor_Entity(Entity, this, "FlyLocomotionClass");
+	Entity = FlecsWorld.Replace_Locomotor_Entity(Entity, this, "FlyLocomotionClass");
 }
 
 

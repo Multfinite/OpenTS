@@ -113,7 +113,7 @@ WeaponTypeClass::WeaponTypeClass(char const * ininame) :
 	Sound(),
 	Anim()
 {
-	Entity = Replace_Entity(Entity, this, "WeaponTypeClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "WeaponTypeClass");
 	for (int i = 0; i < ARRAY_SIZE(BurstDelay); i++) {
 		BurstDelay[i] = -1;
 	}

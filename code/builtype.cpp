@@ -347,7 +347,7 @@ BuildingTypeClass::BuildingTypeClass(char const * ininame) :
 	ProduceCashBudget(0),
 	IsProduceCashResetOnCapture(false)
 {
-	Entity = Replace_Entity(Entity, this, "BuildingTypeClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "BuildingTypeClass");
 	Create_ID();
 	BuildingTypes.Add(this);
 	HeapID = (StructType)BuildingTypes.ID(this);

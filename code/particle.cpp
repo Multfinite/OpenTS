@@ -92,7 +92,7 @@ ParticleClass::ParticleClass(ParticleTypeClass const * type, Coord const & origi
 	WasSaved(false),
 	IsToDie(false)
 {
-	Entity = Replace_Entity(Entity, this, "ParticleClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "ParticleClass");
 	Create_ID();
 	Particles.Add(this);
 
@@ -181,7 +181,7 @@ ParticleClass::ParticleClass(void) :
 	WasSaved(false),
 	IsToDie(false)
 {
-	Entity = Replace_Entity(Entity, this, "ParticleClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "ParticleClass");
 	Particles.Add(this);
 }
 

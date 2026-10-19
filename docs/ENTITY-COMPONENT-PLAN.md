@@ -403,18 +403,19 @@ code/flecs/
                     abstract.h without pulling in flecs. Follows the .hh
                     rule in docs/STYLE.md: no static initialization, no
                     nontrivial inline code.
-  world.h      — FlecsWorldClass: the bridge the rest of the engine
-                    calls. Declares attach, destroy, component access for
-                    new-feature code, and the two iteration patterns of
-                    §5.5. No flecs types in any signature.
-  world.cpp    — the only translation unit that includes flecs.hpp.
-                    Holds the flecs::world by pointer (PIMPL), creates it
-                    lazily on first attach, and implements shutdown.
+  world.h      — FlecsWorldClass: the EC layer as one class. Declares
+                    attach, destroy, parenting, and reset as methods. No
+                    flecs type appears in the header.
+  world.cpp    — implements FlecsWorldClass. The only translation unit
+                    that includes flecs.h; the flecs::world is held
+                    behind a void * and created lazily on first attach.
   components.hh — component structs for new features, data only
                     (grows one struct per feature, §7).
-  register.cpp — registers every component and class tag with the
-                    world, explicitly, in one function. No static
-                    initializers register components.
+  register.cpp — FlecsWorldClass::Register_Tags: registers every class
+                    tag with the world, explicitly, in one function. No
+                    static initializers register components.
+code/_flecs.cpp — the one global FlecsWorld object, beside the other
+                    engine globals in underscore-prefixed init files.
 ```
 
 `code/CMakeLists.txt` gathers sources by recursive glob, so the new
@@ -436,7 +437,7 @@ header.
 `id.hh` only:
 
 ```cpp
-EntityId Entity;   // 0 until Attach_Entity runs; never saved.
+EntityId Entity;   // 0 until the leaf constructor attaches; never saved.
 ```
 
 - It is not added to `AbstractClass::Serialize`, so the save format does
@@ -447,40 +448,40 @@ EntityId Entity;   // 0 until Attach_Entity runs; never saved.
   this classification in its change record, with `sizeof` checks in the
   test harness for the pilot classes.
 - `LocomotionClass` gains the same member through the same header.
-- Access is through `FlecsWorld` functions (`Entity_Of(object)`), so the
+- Access is through the `FlecsWorld` object, so the
   raw value never leaves `code/flecs/` except as an opaque ID.
 
 ### 5.3 Attach and destroy
 
-One template in `world.h`, implemented in `world.cpp`, does the
-work. The template parameter is the leaf class, so the entity receives
-the correct class tag without a virtual call during construction (the
-dynamic type is not yet the leaf while base constructors run — which is
-also why attach cannot live in `AbstractClass`'s constructor):
+`FlecsWorldClass` does the work; the engine holds one global object,
+`FlecsWorld`, defined in `code/_flecs.cpp`. The class name is passed as a
+string, so the entity receives the correct class tag without a virtual
+call during construction (the dynamic type is not yet the leaf while
+base constructors run — which is also why attach cannot live in
+`AbstractClass`'s constructor):
 
 ```cpp
 // In each leaf constructor, beside the existing heap registration:
-Attach_Entity<UnitClass>(this);
+Entity = FlecsWorld.Replace_Entity(Entity, this, "UnitClass");
 
 // In ~AbstractClass() and ~LocomotionClass(), the only destroy call:
-Destroy_Entity(this);
+FlecsWorld.Destroy_Entity(Entity);
 ```
 
-`Attach_Entity<T>`:
+`Replace_Entity`:
 
-1. If the object already holds a live entity, destroys it and creates a
+1. Destroys the entity the object already holds, if any, then attaches a
    fresh one. That makes the placement reconstruction of `CellClass`
    (§3.2) safe without a destructor call, and makes a doubled attach in
-   one constructor replace rather than duplicate. Attach is therefore
-   the last registration line of each leaf constructor, after any
-   component the constructor itself sets.
-2. Creates the world on first use (function-local initialization inside
-   `world.cpp`, with no flecs state of its own at static-init time, so
-   the `CellClass BlubCell` sentinel (a cell, so it attaches) constructing
-   before `main` creates the world on
-   demand rather than depending on startup order — and the world is
-   intentionally leaked unless `Shutdown_Flecs_World()` runs first, so
-   static destruction order cannot destroy entities into a dead world).
+   one constructor replace rather than duplicate.
+2. Creates the flecs world on first use, inside
+   `FlecsWorldClass::Ensure_World`. The `FlecsWorld` constructor
+   deliberately does not reset its members: static storage has already
+   zeroed them, and the `CellClass BlubCell` sentinel, which attaches
+   before `main` and possibly before `FlecsWorld` is constructed, has
+   already created the world through them. `Shutdown` is called from
+   `Prog_End`, and attach recreates the world on demand, so a global
+   destroyed after shutdown cannot crash on it.
 3. Creates the entity, adds the tag registered for `T`, and sets the one
    infrastructure component every entity carries:
 
@@ -491,26 +492,22 @@ Destroy_Entity(this);
    `LegacyObjectLink` is the single exception to "components only for
    new functionality": it holds no game state, duplicates no member, and
    exists so a query result can reach the C++ object. Locomotor children
-   carry the matching `LegacyLocomotionLink`. Both are registered in
-   `register.cpp`, are never saved, and are never read by simulation
+   carry the matching `LegacyLocomotionLink`. Both are registered by
+   `Ensure_World`, are never saved, and are never read by simulation
    code except to resolve the object.
-4. For instances of `ObjectClass`, adds the `TypeOf` pair of §5.4 when
-   `Class_Of()` is already set at attach time; where a constructor sets
-   the type later, the pair is added by the same one-line helper called
-   from the place that sets it. Phase 0 lists, per pilot class, which of
-   the two applies.
+4. The `TypeOf` pair of §5.4 is not added yet; it lands with the first
+   feature that needs it, from the place each constructor sets its type.
 
 `Destroy_Entity` destroys the entity (which removes all its
-components and pairs), clears the member to 0, and tolerates a 0 or a
-missing world. It runs from the base destructor, after every heap and
-tracker removal in the leaf destructor has already happened, so no
-legacy code can observe a half-destroyed pairing.
+components and pairs) and tolerates a 0 or a missing world. It runs from
+the base destructor, after every heap and tracker removal in the leaf
+destructor has already happened, so no legacy code can observe a
+half-destroyed pairing.
 
 World reset between scenarios needs no separate sweep: scenario teardown
 already `delete`s every heap object, and each destructor destroys its
-entity. `Reset_Flecs_World()` exists for tests and for the failed-load
-path, and asserts in Debug that it is called only when the bridge holds
-no live links.
+entity. `FlecsWorld.Reset` exists for tests and for checking that a
+teardown left no live entity behind (`Live_Entity_Count`).
 
 ### 5.4 Class tags, type links, and prefabs
 

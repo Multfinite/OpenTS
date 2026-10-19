@@ -70,7 +70,7 @@ TiberiumClass::TiberiumClass(char const * ininame) :
 	GrowthState(NULL),
 	GrowthTimer()
 {
-	Entity = Replace_Entity(Entity, this, "TiberiumClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "TiberiumClass");
 	HeapID = (TiberiumType)Tiberiums.Count();
 	Tiberiums.Add(this);
 	Debris.Clear();

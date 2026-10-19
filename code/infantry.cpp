@@ -245,7 +245,7 @@ InfantryClass::InfantryClass(InfantryTypeClass const * type, HouseClass * house)
 	WasSelected(false),
 	Fear(FEAR_NONE)
 {
-	Entity = Replace_Entity(Entity, this, "InfantryClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "InfantryClass");
 	Create_ID();
 	Infantry.Add(this);
 

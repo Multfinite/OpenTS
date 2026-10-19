@@ -55,7 +55,7 @@ EMPulseClass::EMPulseClass(Cell cell, int spread, int duration, TechnoClass * so
 	CreationFrame(Frame),
 	Duration(duration)
 {
-	Entity = Replace_Entity(Entity, this, "EMPulseClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "EMPulseClass");
 	Create_ID();
 	EMPulses.Add(this);
 	Create(source);
@@ -74,7 +74,7 @@ EMPulseClass::EMPulseClass(void) :
 	CreationFrame(0),
 	Duration(0)
 {
-	Entity = Replace_Entity(Entity, this, "EMPulseClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "EMPulseClass");
 
 }
 

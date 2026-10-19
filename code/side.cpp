@@ -44,7 +44,7 @@ SideClass::SideClass(char const * ininame) :
 	AIBaseDefensePlaceholders(2),
 	IsAIBaseDefensesWithWalls(false)
 {
-	Entity = Replace_Entity(Entity, this, "SideClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "SideClass");
 	Create_ID();
 	Sides.Add(this);
 

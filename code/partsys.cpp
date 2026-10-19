@@ -65,7 +65,7 @@ ParticleSystemClass::ParticleSystemClass(ParticleSystemTypeClass const * type, C
 	IsMarkedForDeletion(false),
 	IsRandomSparkDirection(false)
 {
-	Entity = Replace_Entity(Entity, this, "ParticleSystemClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "ParticleSystemClass");
 	Create_ID();
 	ParticleSystems.Add(this);
 
@@ -125,7 +125,7 @@ ParticleSystemClass::ParticleSystemClass(void) :
 	IsMarkedForDeletion(false),
 	IsRandomSparkDirection(false)
 {
-	Entity = Replace_Entity(Entity, this, "ParticleSystemClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "ParticleSystemClass");
 	SystemParticles.Clear();
 	ParticleSystems.Add(this);
 	ObjectPtrTracker.Add(this);

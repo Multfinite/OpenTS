@@ -43,7 +43,7 @@ TubeClass::TubeClass(Cell const &cell, FacingType dir) :
 	EnterDir(dir),
 	Count(0)
 {
-	Entity = Replace_Entity(Entity, this, "TubeClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "TubeClass");
 	Create_ID();
 
 	for (int i = 0; i < 100; i++) {

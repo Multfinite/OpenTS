@@ -80,7 +80,7 @@ SuperWeaponTypeClass::SuperWeaponTypeClass(char const * ininame) :
 	IsPowered(true),
 	IsManualControl(false)
 {
-	Entity = Replace_Entity(Entity, this, "SuperWeaponTypeClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "SuperWeaponTypeClass");
 	Create_ID();
 	HeapID = (SuperWeaponType)SuperWeaponTypes.Count();
 	SuperWeaponTypes.Add(this);

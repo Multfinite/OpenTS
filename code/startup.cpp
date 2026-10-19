@@ -998,6 +998,8 @@ void __cdecl Prog_End(void)
 		Scen = NULL;
 	}
 
+	FlecsWorld.Shutdown();
+
 	Unregister_Classes();
 
 	if (LanguageResources) {

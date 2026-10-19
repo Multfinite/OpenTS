@@ -51,7 +51,7 @@ WalkLocomotionClass::WalkLocomotionClass(void) :
 	IsProcessingMovement(false),
 	IsReallyMoving(false)
 {
-	Entity = Replace_Locomotor_Entity(Entity, this, "WalkLocomotionClass");
+	Entity = FlecsWorld.Replace_Locomotor_Entity(Entity, this, "WalkLocomotionClass");
 }
 
 

@@ -63,7 +63,7 @@ ParticleTypeClass::ParticleTypeClass(char const * ininame) :
 	NextParticle(PARTICLE_NONE),
 	BehavesLike(BEHAVIOR_NONE)
 {
-	Entity = Replace_Entity(Entity, this, "ParticleTypeClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "ParticleTypeClass");
 	ParticleTypes.Add(this);
 	AbstractTypePtrTracker.Add(this);
 	IsSentient = false;

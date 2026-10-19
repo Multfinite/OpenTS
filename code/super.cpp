@@ -96,7 +96,7 @@ SuperClass::SuperClass(void) :
 	IsSuspended(false),
 	ChargeDrainState(SUSPENDED)
 {
-	Entity = Replace_Entity(Entity, this, "SuperClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "SuperClass");
 	SuperWeapons.Add(this);
 }
 
@@ -133,7 +133,7 @@ SuperClass::SuperClass(SuperWeaponTypeClass * type, HouseClass * owner) :
 	IsSuspended(false),
 	ChargeDrainState(SUSPENDED)
 {
-	Entity = Replace_Entity(Entity, this, "SuperClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "SuperClass");
 	Create_ID();
 	SuperWeapons.Add(this);
 	AbstractTypePtrTracker.Add(this);

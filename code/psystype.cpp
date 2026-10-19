@@ -56,7 +56,7 @@ ParticleSystemTypeClass::ParticleSystemTypeClass(char const * ininame) :
 	IsLaser(false),
 	OneFrameLight(false)
 {
-	Entity = Replace_Entity(Entity, this, "ParticleSystemTypeClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "ParticleSystemTypeClass");
 	Create_ID();
 	ParticleSystemTypes.Add(this);
 	IsSentient = true;

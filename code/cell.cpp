@@ -320,7 +320,7 @@ CellClass::CellClass(void) :
 	Elevation(0),
 	AdjacentObjectCount(0)
 {
-	Entity = Replace_Entity(Entity, this, "CellClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "CellClass");
 	Create_ID();
 	Flag.Composite = 0;
 	BridgeFlag.Composite = 0;

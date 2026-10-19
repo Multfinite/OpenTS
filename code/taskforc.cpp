@@ -44,7 +44,7 @@ TaskForceClass::TaskForceClass(char const *name) :
 	ClassCount(0),
 	Scope(SCOPE_LOCAL)
 {
-	Entity = Replace_Entity(Entity, this, "TaskForceClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "TaskForceClass");
 	TaskForces.Add(this);
 
 	for (int i = 0; i < MAX_TEAM_CLASSCOUNT; i++) {
@@ -73,7 +73,7 @@ TaskForceClass::TaskForceClass(TaskForceClass const & that) :
 {
 	// The base copy carried the source's entity ID; the copy gets its own.
 	Entity = 0;
-	Entity = Replace_Entity(Entity, this, "TaskForceClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "TaskForceClass");
 	Group = that.Group;
 	ClassCount = that.ClassCount;
 	Scope = that.Scope;

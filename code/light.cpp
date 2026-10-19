@@ -53,7 +53,7 @@ LightSourceClass::LightSourceClass(Coord coord, int visibility, int intensity, i
 	Visibility(visibility),
 	IsEnabled(false)
 {
-	Entity = Replace_Entity(Entity, this, "LightSourceClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "LightSourceClass");
 	LightSources.Add(this);
 }
 
@@ -73,7 +73,7 @@ LightSourceClass::LightSourceClass(void) :
 	Visibility(0),
 	IsEnabled(false)
 {
-	Entity = Replace_Entity(Entity, this, "LightSourceClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "LightSourceClass");
 	LightSources.Add(this);
 }
 

@@ -17,46 +17,56 @@
 
 #include <flecs.h>
 
-#include <cstring>
-#include <string>
-#include <unordered_map>
-#include <utility>
 #include <vector>
 
 namespace {
 
-flecs::world * World = nullptr;
-bool Registering = false;
-int LiveCount = 0;
-std::unordered_map<std::string, flecs::entity> ClassTags;
+// The world behind the void * the class holds.
+flecs::world * As_World(void * world)
+{
+	return(static_cast<flecs::world *>(world));
+}
 
-flecs::world & Ensure_World(void)
+}	// namespace
+
+
+// Intentionally does not reset the members: static storage has already
+// zeroed them, and a global that attached before this object was constructed
+// (the CellClass BlubCell sentinel) has already created the world through
+// them. Resetting here would lose that world and its class tags.
+FlecsWorldClass::FlecsWorldClass(void)
+{
+}
+
+
+FlecsWorldClass::~FlecsWorldClass(void)
+{
+	Shutdown();
+}
+
+
+void FlecsWorldClass::Ensure_World(void)
 {
 	if (World == nullptr) {
-		World = new flecs::world();
-		World->component<LegacyObjectLink>();
-		World->component<LegacyLocomotionLink>();
-		Registering = true;
-		Register_Flecs_Tags();
-		Registering = false;
+		flecs::world * world = new flecs::world();
+		World = world;
+		world->component<LegacyObjectLink>();
+		world->component<LegacyLocomotionLink>();
+		Register_Tags();
 	}
-	return(*World);
 }
 
-flecs::entity Tag_For(char const * classname)
+
+void FlecsWorldClass::Register_Tag(char const * classname)
 {
-	auto const found = ClassTags.find(classname);
-	if (found != ClassTags.end()) {
-		return(found->second);
+	flecs::world * world = As_World(World);
+	if (world != nullptr && !world->lookup(classname)) {
+		world->entity(classname);
 	}
-	// A class that reaches attach without a register.cpp entry still gets a
-	// tag, named for it, so a missing entry is visible rather than fatal.
-	flecs::entity const tag = Ensure_World().entity(classname);
-	ClassTags.emplace(classname, tag);
-	return(tag);
 }
 
-EntityId Attach(void * object, char const * classname, bool locomotion)
+
+EntityId FlecsWorldClass::Attach(void * object, char const * classname, bool locomotion)
 {
 #ifdef OPENTS_EC_DISABLED
 	(void)object;
@@ -64,9 +74,14 @@ EntityId Attach(void * object, char const * classname, bool locomotion)
 	(void)locomotion;
 	return(0);
 #else
-	flecs::world & world = Ensure_World();
-	flecs::entity const entity = world.entity();
-	entity.add(Tag_For(classname));
+	Ensure_World();
+	flecs::world * world = As_World(World);
+	flecs::entity const entity = world->entity();
+
+	flecs::entity const tag = world->lookup(classname);
+	if (tag) {
+		entity.add(tag);
+	}
 	if (locomotion) {
 		entity.set<LegacyLocomotionLink>({ object });
 	} else {
@@ -77,52 +92,39 @@ EntityId Attach(void * object, char const * classname, bool locomotion)
 #endif
 }
 
-}	// namespace
 
-
-void Register_Class_Tag(char const * classname)
-{
-	if (!Registering || World == nullptr) {
-		return;
-	}
-	if (ClassTags.find(classname) == ClassTags.end()) {
-		ClassTags.emplace(classname, World->entity(classname));
-	}
-}
-
-
-EntityId Attach_Entity(void * object, char const * classname)
+EntityId FlecsWorldClass::Attach_Entity(void * object, char const * classname)
 {
 	return(Attach(object, classname, false));
 }
 
 
-EntityId Attach_Locomotor_Entity(void * locomotion, char const * classname)
+EntityId FlecsWorldClass::Attach_Locomotor_Entity(void * locomotion, char const * classname)
 {
 	return(Attach(locomotion, classname, true));
 }
 
 
-EntityId Replace_Entity(EntityId current, void * object, char const * classname)
+EntityId FlecsWorldClass::Replace_Entity(EntityId current, void * object, char const * classname)
 {
 	Destroy_Entity(current);
 	return(Attach_Entity(object, classname));
 }
 
 
-EntityId Replace_Locomotor_Entity(EntityId current, void * locomotion, char const * classname)
+EntityId FlecsWorldClass::Replace_Locomotor_Entity(EntityId current, void * locomotion, char const * classname)
 {
 	Destroy_Entity(current);
 	return(Attach_Locomotor_Entity(locomotion, classname));
 }
 
 
-void Destroy_Entity(EntityId entity)
+void FlecsWorldClass::Destroy_Entity(EntityId entity)
 {
 	if (entity == 0 || World == nullptr) {
 		return;
 	}
-	flecs::entity const target = World->entity(entity);
+	flecs::entity const target = As_World(World)->entity(entity);
 	if (target.is_alive()) {
 		target.destruct();
 		LiveCount--;
@@ -130,57 +132,60 @@ void Destroy_Entity(EntityId entity)
 }
 
 
-void Set_Entity_Parent(EntityId child, EntityId parent)
+void FlecsWorldClass::Set_Entity_Parent(EntityId child, EntityId parent)
 {
 	if (child == 0 || parent == 0 || World == nullptr) {
 		return;
 	}
-	flecs::entity const childentity = World->entity(child);
-	flecs::entity const parententity = World->entity(parent);
+	flecs::world * world = As_World(World);
+	flecs::entity const childentity = world->entity(child);
+	flecs::entity const parententity = world->entity(parent);
 	if (childentity.is_alive() && parententity.is_alive()) {
 		childentity.child_of(parententity);
 	}
 }
 
 
-bool Entity_Is_Alive(EntityId entity)
+bool FlecsWorldClass::Entity_Is_Alive(EntityId entity)
 {
 	if (entity == 0 || World == nullptr) {
 		return(false);
 	}
-	return(World->entity(entity).is_alive());
+	return(As_World(World)->entity(entity).is_alive());
 }
 
 
-bool Entity_Has_Tag(EntityId entity, char const * classname)
+bool FlecsWorldClass::Entity_Has_Tag(EntityId entity, char const * classname)
 {
 	if (!Entity_Is_Alive(entity) || World == nullptr) {
 		return(false);
 	}
-	auto const found = ClassTags.find(classname);
-	if (found == ClassTags.end()) {
+	flecs::world * world = As_World(World);
+	flecs::entity const tag = world->lookup(classname);
+	if (!tag) {
 		return(false);
 	}
-	return(World->entity(entity).has(found->second));
+	return(world->entity(entity).has(tag));
 }
 
 
-int Live_Entity_Count(void)
+int FlecsWorldClass::Live_Entity_Count(void) const
 {
 	return(LiveCount);
 }
 
 
-void Reset_Flecs_World(void)
+void FlecsWorldClass::Reset(void)
 {
 	if (World == nullptr) {
 		return;
 	}
+	flecs::world * world = As_World(World);
 	std::vector<flecs::entity> entities;
-	World->query<LegacyObjectLink>().each([&entities](flecs::entity entity, LegacyObjectLink &) {
+	world->query<LegacyObjectLink>().each([&entities](flecs::entity entity, LegacyObjectLink &) {
 		entities.push_back(entity);
 	});
-	World->query<LegacyLocomotionLink>().each([&entities](flecs::entity entity, LegacyLocomotionLink &) {
+	world->query<LegacyLocomotionLink>().each([&entities](flecs::entity entity, LegacyLocomotionLink &) {
 		entities.push_back(entity);
 	});
 	for (flecs::entity const entity : entities) {
@@ -192,10 +197,9 @@ void Reset_Flecs_World(void)
 }
 
 
-void Shutdown_Flecs_World(void)
+void FlecsWorldClass::Shutdown(void)
 {
-	delete World;
+	delete As_World(World);
 	World = nullptr;
-	ClassTags.clear();
 	LiveCount = 0;
 }

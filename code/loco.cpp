@@ -55,6 +55,8 @@ LocomotionClass::LocomotionClass(void) :
 /// </summary>
 LocomotionClass::~LocomotionClass(void)
 {
+	FlecsWorld.Destroy_Entity(Entity);
+	Entity = 0;
 	LinkedTo = NULL;
 }
 

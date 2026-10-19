@@ -77,7 +77,7 @@ AITriggerTypeClass::AITriggerTypeClass(const char *name) :
 	TimesSucceded(0),
 	TimesExecuted(0)
 {
-	Entity = Replace_Entity(Entity, this, "AITriggerTypeClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "AITriggerTypeClass");
 	memset(Params.Data, 0, sizeof(Params.Data));
 
 	AITriggerTypes.Add(this);

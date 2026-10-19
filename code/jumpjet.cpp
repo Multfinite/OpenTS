@@ -48,7 +48,7 @@ JumpjetLocomotionClass::JumpjetLocomotionClass(void) :
 	CurrentWobble(0.0),
 	IsLanding(false)
 {
-	Entity = Replace_Locomotor_Entity(Entity, this, "JumpjetLocomotionClass");
+	Entity = FlecsWorld.Replace_Locomotor_Entity(Entity, this, "JumpjetLocomotionClass");
 
 }
 

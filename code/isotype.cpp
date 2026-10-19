@@ -264,7 +264,7 @@ IsometricTileTypeClass::IsometricTileTypeClass(IsometricTileType type, int unkno
 	IsAllowTiberium(false),
 	UseCount(0)
 {
-	Entity = Replace_Entity(Entity, this, "IsometricTileTypeClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "IsometricTileTypeClass");
 	AbstractTypePtrTracker.Add(this);
 	if (!skip_registration) {
 		IsometricTileTypes.Add(this);

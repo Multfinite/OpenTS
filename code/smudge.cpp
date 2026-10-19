@@ -85,7 +85,7 @@ SmudgeClass::SmudgeClass(SmudgeTypeClass const * type, Coord const & pos, Houses
 	BASECLASS(),
 	Class((SmudgeTypeClass *)type)
 {
-	Entity = Replace_Entity(Entity, this, "SmudgeClass");
+	Entity = FlecsWorld.Replace_Entity(Entity, this, "SmudgeClass");
 	Create_ID();
 	Smudges.Add(this);
 	if (pos != COORD_NONE) {
