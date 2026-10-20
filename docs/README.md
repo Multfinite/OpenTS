@@ -12,6 +12,10 @@ The developer guides are split by subject:
 - [Entity-component adoption plan](ENTITY-COMPONENT-PLAN.md) — the proposed
   flecs adoption sequence: entity coverage for final game classes, components
   for new functionality only, and no flecs systems.
+- [Component lifecycle and engine call sites](COMPONENT-LIFECYCLE.md) — the
+  engine call sites, ordering invariants, and dispatch options for component
+  callbacks (`Ready`, `Process`, world entry and exit, detachment, rendering,
+  persistence, and checksums).
 - [The saved game format](SAVE-FORMAT.md) — the layout of a `.SAV` file: its
   header, listing fields, compressed content, and object records.
 - [ts-patches in OpenTS](TS-PATCHES.md) — each CnCNet ts-patches patch and

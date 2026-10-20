@@ -90,6 +90,12 @@ class AbstractClass : public IPersistent
 		int ID;
 
 		/*
+		 * The flecs entity naming this object in this process, created by its
+		 * leaf constructor. Zero until then; never saved or folded into a CRC.
+		 */
+		EntityId Entity;
+
+		/*
 		 * If this object has changed since it was last written out, then this flag will be
 		 * true. Save clears it on request.
 		 */
@@ -99,6 +105,7 @@ class AbstractClass : public IPersistent
 		**	Constructor & destructors.
 		*/
 		AbstractClass(void);
+		AbstractClass(AbstractClass const & that) : IPersistent(that), ID(that.ID), Entity(0), Dirty(that.Dirty) {}
 		virtual ~AbstractClass(void);
 
 

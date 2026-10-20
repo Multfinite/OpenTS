@@ -40,7 +40,16 @@ class LocomotionClass : public IPersistent, public ILocomotion
 		EntityId Entity;
 
 		LocomotionClass(void);
+		LocomotionClass(LocomotionClass const & that) : IPersistent(that), ILocomotion(that), Entity(0), LinkedTo(that.LinkedTo), IsPowered(that.IsPowered), Dirty(that.Dirty) {}
 		virtual ~LocomotionClass(void);
+
+		LocomotionClass & operator = (LocomotionClass const & that)
+		{
+			LinkedTo = that.LinkedTo;
+			IsPowered = that.IsPowered;
+			Dirty = that.Dirty;
+			return(*this);
+		}
 
 		virtual bool Load(SaveStreamClass & stream) override;
 		virtual bool Save(SaveStreamClass & stream, bool cleardirty) override;

@@ -15,19 +15,26 @@ Implementation status on the adoption branch:
   `entityinventory` CTest check and verifies all 65 included classes
   against `code/flecs/register.cpp` and the constructor attach calls.
 - Phase 1: done. flecs v4.1.6 is a pinned submodule; `code/flecs/`
-  (`id.hh`, `world.h`, `world.cpp`, `components.hh`, `register.cpp`)
-  builds the bridge with `OPENTS_EC` on by default; `tests/flecs`
-  covers attach, tags, parenting, replacement, reset, and shutdown.
-  Verified by compiling and running the harness against the vendored
-  flecs on a Linux toolchain; the four MSVC configurations still need
-  CI or maintainer builds, which are build evidence only.
-- Phase 2: attach half done (the pilot classes are in the Phase 3
-  rollout below). The vertical slice is open: no first feature (D4) has
-  been chosen, so no gameplay component exists yet, by rule 3.
+  (`id.hh`, `lifecycle.hh`, `world.h`, `world.cpp`, `components.hh`,
+  `register.cpp`) builds the bridge and the Option B `ComponentOps`
+  lifecycle dispatcher ([Component lifecycle](COMPONENT-LIFECYCLE.md))
+  with `OPENTS_EC` on by default; `tests/flecs` covers attach, tags,
+  parenting, cascade count accuracy, C++20 component lifecycle hooks,
+  canonical `(Kind, FetchId, AttachSequence)` lockstep ordering, CRC
+  folding, directory-framed save streams, reset, and shutdown across
+  Debug (ASan + UBSan + LSan), Release, and `OPENTS_EC_DISABLED` on a
+  Linux toolchain; the four MSVC configurations still need CI or
+  maintainer builds, which are build evidence only.
+- Phase 2: attach half and core lifecycle bridge done; engine call-site
+  wiring (`logic.cpp`, `scenario.cpp`, `object.cpp`, `tracker.cpp`,
+  `saveload.cpp`, `tactical.cpp`, `startup.cpp`) and the vertical slice
+  stay open until a first feature (D4) lands, by rule 3.
 - Phase 3: done in code. All 65 included classes attach in their
-  constructors (81 constructor bodies) and destroy from
-  `~AbstractClass()` / `~LocomotionClass()`; locomotors parent through
-  `Link_To_Object`. MSVC builds and played checks are still open.
+  constructors (81 constructor bodies), preserve clean entity state on
+  copy construction, and destroy from `~AbstractClass()` /
+  `~LocomotionClass()`; locomotors parent through `Link_To_Object` and
+  restore parenting in `LocomotionClass::Post_Load`. MSVC builds and
+  played checks are still open.
 - Phase 4: starts when a first feature lands by the §7 checklist.
 - Phase 5: partially done (bridge-level leak accounting through
   `Live_Entity_Count`, reset and failed-destroy tolerance in
@@ -398,24 +405,30 @@ that includes flecs headers:
 
 ```text
 code/flecs/
-  id.hh        — definition-only: EntityId (uint64_t), the invalid
-                    value, and the class-tag identifiers. Includable from
-                    abstract.h without pulling in flecs. Follows the .hh
-                    rule in docs/STYLE.md: no static initialization, no
+  id.hh         — definition-only: EntityId (uint64_t) and the invalid
+                    zero sentinel. Includable from abstract.h without
+                    pulling in flecs. Follows the .hh rule in
+                    docs/STYLE.md: no static initialization, no
                     nontrivial inline code.
-  world.h      — FlecsWorldClass: the EC layer as one class. Declares
-                    attach, destroy, parenting, and reset as methods. No
-                    flecs type appears in the header.
-  world.cpp    — implements FlecsWorldClass. The only translation unit
+  lifecycle.hh  — C++20 concepts, SimPhase, TickScope, EntityContext,
+                    and ComponentOps trait generation for component
+                    lifecycle dispatch (docs/COMPONENT-LIFECYCLE.md).
+  world.h       — FlecsWorldClass: the EC layer as one class. Declares
+                    attach, destroy, parenting, component storage, and
+                    lifecycle dispatch methods. No flecs type appears in
+                    the header.
+  world.cpp     — implements FlecsWorldClass. The only translation unit
                     that includes flecs.h; the flecs::world is held
                     behind a void * and created lazily on first attach.
-  components.hh — component structs for new features, data only
-                    (grows one struct per feature, §7).
-  register.cpp — FlecsWorldClass::Register_Tags: registers every class
+  components.hh — bridge link structs and component structs for new
+                    features, data only (grows one struct per feature,
+                    §7).
+  register.cpp  — FlecsWorldClass::Register_Tags: registers every class
                     tag with the world, explicitly, in one function. No
                     static initializers register components.
-code/_flecs.cpp — the one global FlecsWorld object, beside the other
-                    engine globals in underscore-prefixed init files.
+code/_flecs.cpp — the one constinit global FlecsWorld object, beside the
+                    other engine globals in underscore-prefixed init
+                    files.
 ```
 
 `code/CMakeLists.txt` gathers sources by recursive glob, so the new

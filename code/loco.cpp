@@ -70,6 +70,7 @@ LocomotionClass::~LocomotionClass(void)
 void LocomotionClass::Link_To_Object(void *pointer)
 {
 	LinkedTo = (FootClass *)pointer;
+	FlecsWorld.Set_Entity_Parent(Entity, LinkedTo != nullptr ? LinkedTo->Entity : 0);
 }
 
 
@@ -279,10 +280,12 @@ void LocomotionClass::Serialize(SaveStreamClass & stream)
 
 /// <summary>
 /// Restores the state a locomotor could not carry in its record.
-/// The bare locomotor carries nothing of the sort, so there is nothing to do.
+/// Re-establishes the child relationship to the linked unit's entity after pointer
+/// swizzling completes.
 /// </summary>
 void LocomotionClass::Post_Load(void)
 {
+	FlecsWorld.Set_Entity_Parent(Entity, LinkedTo != nullptr ? LinkedTo->Entity : 0);
 }
 
 

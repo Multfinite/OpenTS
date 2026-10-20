@@ -43,6 +43,7 @@
 #include "_rtti.h"
 #include "coord.h"
 #include "crc.h"
+#include "flecs/world.h"
 #include "globals.h"
 #include "savestream.h"
 #include "scenario.h"
