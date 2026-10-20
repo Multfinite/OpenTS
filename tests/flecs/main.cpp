@@ -411,7 +411,6 @@ struct FragmentMarkerB {
 	int Dummy = 2;
 };
 
-#ifndef OPENTS_EC_DISABLED
 
 std::uint32_t Run_Peer_Simulation(bool scramble_peer_b, int & out_crc)
 {
@@ -472,46 +471,11 @@ std::uint32_t Run_Peer_Simulation(bool scramble_peer_b, int & out_crc)
 	return(SharedPrng);
 }
 
-#endif
-
 }	// namespace
 
 
 int main(void)
 {
-#ifdef OPENTS_EC_DISABLED
-	AbstractClass mock_unit{ 1, 1, true, false };
-	FlecsWorld.Set_Object_Inspector(Inspect_Mock_Object);
-	FlecsWorld.Register_Component<WorldActiveBurnComponent>("WorldActiveBurnComponent");
-
-	EntityId const disabled_entity = FlecsWorld.Attach_Entity(&mock_unit, "UnitClass");
-	Check(disabled_entity == 0, "disabled build returns zero on attach");
-	Check(!FlecsWorld.Entity_Is_Alive(disabled_entity), "disabled entity reports dead");
-	Check(FlecsWorld.Live_Entity_Count() == 0, "disabled world has zero live count");
-	Check(FlecsWorld.Set_Component<WorldActiveBurnComponent>(disabled_entity, {}) == nullptr, "disabled set returns null");
-	Check(!FlecsWorld.Has_Component<WorldActiveBurnComponent>(disabled_entity), "disabled has returns false");
-
-	FlecsWorld.Begin_Scenario_Load();
-	FlecsWorld.Flush_Scenario_Ready();
-	FlecsWorld.Notify_Enter_World(disabled_entity);
-	FlecsWorld.Run_Sim_Phase(SimPhase::PostObjects);
-	FlecsWorld.Render_Foreground(nullptr);
-	FlecsWorld.Detach_Target(&mock_unit, true);
-
-	CRCEngine crc;
-	FlecsWorld.Fold_CRCs(crc);
-	Check(crc() == 0, "disabled CRC fold leaves engine unchanged");
-
-	std::vector<unsigned char> buffer;
-	SaveStreamClass save_stream(buffer, SaveStreamClass::MODE_SAVE);
-	Check(FlecsWorld.Serialize_Entity(disabled_entity, save_stream), "disabled save succeeds");
-	SaveStreamClass load_stream(buffer, SaveStreamClass::MODE_LOAD);
-	Check(FlecsWorld.Serialize_Entity(disabled_entity, load_stream), "disabled load succeeds");
-	FlecsWorld.Post_Load_Resolve_All();
-	FlecsWorld.Notify_Exit_World(disabled_entity);
-	FlecsWorld.Reset();
-	FlecsWorld.Shutdown();
-#else
 	FlecsWorld.Set_Object_Inspector(Inspect_Mock_Object);
 
 	// 1. Baseline attach, tags, parent cascade count accuracy, and reset.
@@ -808,7 +772,6 @@ int main(void)
 	FlecsWorld.Set_Component<TeardownAuditComponent>(post_shutdown, { 7000 });
 	FlecsWorld.Shutdown();
 	Check(TeardownAuditComponent::RemoveCalls == 8111, "shutdown runs On_Remove and cleans up without leaks");
-#endif
 
 	if (Failures == 0) {
 		std::printf("flecs: all checks passed\n");

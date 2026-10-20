@@ -67,7 +67,7 @@ core sources without any of its bundled backends.
 and its C++ API are built; its system, pipeline, script, JSON, meta, HTTP, and
 REST add-ons are left out, and the engine registers no flecs system. The
 [entity-component adoption plan](ENTITY-COMPONENT-PLAN.md) records how the
-layer is used. Set `-DOPENTS_EC=OFF` to compile the layer's bridge to no-ops.
+layer is used.
 
 [SDL](https://github.com/libsdl-org/SDL) 3 is vendored through `thirdparty/SDL`
 at a tested tag and linked statically. Only its video subsystem, which covers

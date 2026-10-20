@@ -14,7 +14,3 @@ opents_add_test(FlecsTest
         flecs/register.cpp
     LIBRARIES flecs_static
 )
-
-if(NOT OPENTS_EC)
-    target_compile_definitions(FlecsTest PRIVATE OPENTS_EC_DISABLED)
-endif()

@@ -33,12 +33,10 @@ flecs::world * As_World(void * world)
 }
 
 
-#ifndef OPENTS_EC_DISABLED
 flecs::world const * As_Const_World(void const * world)
 {
 	return(static_cast<flecs::world const *>(world));
 }
-#endif
 
 
 struct CanonicalSortKey {
@@ -106,7 +104,6 @@ struct FlecsWorldClass::BridgeState {
 };
 
 
-#ifndef OPENTS_EC_DISABLED
 struct FlecsWorldClass::BridgeInternals {
 
 using RegisteredEntry = FlecsWorldClass::BridgeState::RegisteredComponent;
@@ -301,7 +298,6 @@ static void Bind_Component_To_World(flecs::world * world, RegisteredEntry & entr
 }
 
 };
-#endif
 
 
 FlecsWorldClass::~FlecsWorldClass(void)
@@ -323,7 +319,6 @@ FlecsWorldClass::BridgeState & FlecsWorldClass::Ensure_State(void)
 
 void FlecsWorldClass::Ensure_World(void)
 {
-#ifndef OPENTS_EC_DISABLED
 	BridgeState & state = Ensure_State();
 	if (World == nullptr) {
 		flecs::world * world = new flecs::world();
@@ -343,7 +338,6 @@ void FlecsWorldClass::Ensure_World(void)
 			BridgeInternals::Bind_Component_To_World(world, *entry);
 		}
 	}
-#endif
 }
 
 
@@ -358,12 +352,6 @@ void FlecsWorldClass::Register_Tag(char const * classname)
 
 EntityId FlecsWorldClass::Attach(void * object, char const * classname, bool locomotion)
 {
-#ifdef OPENTS_EC_DISABLED
-	(void)object;
-	(void)classname;
-	(void)locomotion;
-	return(0);
-#else
 	Ensure_World();
 	BridgeState & state = Ensure_State();
 	flecs::world * world = As_World(World);
@@ -383,7 +371,6 @@ EntityId FlecsWorldClass::Attach(void * object, char const * classname, bool loc
 	}
 	LiveCount++;
 	return(entity.id());
-#endif
 }
 
 
@@ -415,9 +402,6 @@ EntityId FlecsWorldClass::Replace_Locomotor_Entity(EntityId current, void * loco
 
 void FlecsWorldClass::Destroy_Entity(EntityId entity)
 {
-#ifdef OPENTS_EC_DISABLED
-	(void)entity;
-#else
 	if (entity == 0 || World == nullptr) {
 		return;
 	}
@@ -430,16 +414,11 @@ void FlecsWorldClass::Destroy_Entity(EntityId entity)
 		State->PendingDestroy.insert(entity);
 	}
 	target.destruct();
-#endif
 }
 
 
 void FlecsWorldClass::Set_Entity_Parent(EntityId child, EntityId parent)
 {
-#ifdef OPENTS_EC_DISABLED
-	(void)child;
-	(void)parent;
-#else
 	if (child == 0 || World == nullptr) {
 		return;
 	}
@@ -456,16 +435,11 @@ void FlecsWorldClass::Set_Entity_Parent(EntityId child, EntityId parent)
 	if (parententity.is_alive()) {
 		childentity.child_of(parententity);
 	}
-#endif
 }
 
 
 EntityId FlecsWorldClass::Get_Entity_Parent(EntityId child) const
 {
-#ifdef OPENTS_EC_DISABLED
-	(void)child;
-	return(0);
-#else
 	if (!Entity_Is_Alive(child) || World == nullptr) {
 		return(0);
 	}
@@ -474,16 +448,11 @@ EntityId FlecsWorldClass::Get_Entity_Parent(EntityId child) const
 		return(0);
 	}
 	return(parent.id());
-#endif
 }
 
 
 bool FlecsWorldClass::Entity_Is_Alive(EntityId entity) const
 {
-#ifdef OPENTS_EC_DISABLED
-	(void)entity;
-	return(false);
-#else
 	if (entity == 0 || World == nullptr) {
 		return(false);
 	}
@@ -491,17 +460,11 @@ bool FlecsWorldClass::Entity_Is_Alive(EntityId entity) const
 		return(false);
 	}
 	return(As_Const_World(World)->entity(entity).is_alive());
-#endif
 }
 
 
 bool FlecsWorldClass::Entity_Has_Tag(EntityId entity, char const * classname) const
 {
-#ifdef OPENTS_EC_DISABLED
-	(void)entity;
-	(void)classname;
-	return(false);
-#else
 	if (!Entity_Is_Alive(entity) || World == nullptr || classname == nullptr) {
 		return(false);
 	}
@@ -511,16 +474,11 @@ bool FlecsWorldClass::Entity_Has_Tag(EntityId entity, char const * classname) co
 		return(false);
 	}
 	return(world->entity(entity).has(tag));
-#endif
 }
 
 
 void * FlecsWorldClass::Get_Entity_Object(EntityId entity) const
 {
-#ifdef OPENTS_EC_DISABLED
-	(void)entity;
-	return(nullptr);
-#else
 	if (!Entity_Is_Alive(entity) || World == nullptr) {
 		return(nullptr);
 	}
@@ -532,7 +490,6 @@ void * FlecsWorldClass::Get_Entity_Object(EntityId entity) const
 		return(loco_link->Locomotion);
 	}
 	return(nullptr);
-#endif
 }
 
 
@@ -562,11 +519,6 @@ void FlecsWorldClass::Register_Component_Raw(
 	char const * name,
 	ComponentOps const & ops)
 {
-#ifdef OPENTS_EC_DISABLED
-	(void)key;
-	(void)name;
-	(void)ops;
-#else
 	Ensure_World();
 	BridgeState & state = Ensure_State();
 	flecs::world * world = As_World(World);
@@ -602,21 +554,15 @@ void FlecsWorldClass::Register_Component_Raw(
 		state.IndexByName[entry->Name] = entry->Index;
 	}
 	state.Components.push_back(std::move(entry));
-#endif
 }
 
 
 bool FlecsWorldClass::Is_Component_Registered(char const * name) const
 {
-#ifdef OPENTS_EC_DISABLED
-	(void)name;
-	return(false);
-#else
 	if (State == nullptr || name == nullptr) {
 		return(false);
 	}
 	return(State->IndexByName.find(name) != State->IndexByName.end());
-#endif
 }
 
 
@@ -626,13 +572,6 @@ void * FlecsWorldClass::Ensure_Component_Raw(
 	ComponentOps const & ops,
 	bool & is_new)
 {
-#ifdef OPENTS_EC_DISABLED
-	(void)entity;
-	(void)key;
-	(void)ops;
-	is_new = false;
-	return(nullptr);
-#else
 	is_new = false;
 	if (!Entity_Is_Alive(entity) || World == nullptr) {
 		return(nullptr);
@@ -646,7 +585,6 @@ void * FlecsWorldClass::Ensure_Component_Raw(
 
 	is_new = !ecs_has_id(world->c_ptr(), entity, entry.FlecsId);
 	return(ecs_ensure_id(world->c_ptr(), entity, entry.FlecsId, entry.Ops.Size));
-#endif
 }
 
 
@@ -656,12 +594,6 @@ void FlecsWorldClass::Finalize_Component_Write_Raw(
 	void * slot,
 	bool is_new)
 {
-#ifdef OPENTS_EC_DISABLED
-	(void)entity;
-	(void)key;
-	(void)slot;
-	(void)is_new;
-#else
 	if (World == nullptr || State == nullptr || slot == nullptr) {
 		return;
 	}
@@ -681,17 +613,11 @@ void FlecsWorldClass::Finalize_Component_Write_Raw(
 
 	EntityContext const context = BridgeInternals::Build_Entity_Context(this, world->c_ptr(), State->Inspector, entity);
 	entry.Ops.OnReady(slot, context);
-#endif
 }
 
 
 void * FlecsWorldClass::Get_Component_Raw(EntityId entity, ComponentTypeKey key)
 {
-#ifdef OPENTS_EC_DISABLED
-	(void)entity;
-	(void)key;
-	return(nullptr);
-#else
 	if (!Entity_Is_Alive(entity) || World == nullptr || State == nullptr) {
 		return(nullptr);
 	}
@@ -704,17 +630,11 @@ void * FlecsWorldClass::Get_Component_Raw(EntityId entity, ComponentTypeKey key)
 		return(nullptr);
 	}
 	return(ecs_get_mut_id(As_World(World)->c_ptr(), entity, entry.FlecsId));
-#endif
 }
 
 
 void const * FlecsWorldClass::Try_Get_Component_Raw(EntityId entity, ComponentTypeKey key) const
 {
-#ifdef OPENTS_EC_DISABLED
-	(void)entity;
-	(void)key;
-	return(nullptr);
-#else
 	if (!Entity_Is_Alive(entity) || World == nullptr || State == nullptr) {
 		return(nullptr);
 	}
@@ -727,17 +647,11 @@ void const * FlecsWorldClass::Try_Get_Component_Raw(EntityId entity, ComponentTy
 		return(nullptr);
 	}
 	return(ecs_get_id(As_Const_World(World)->c_ptr(), entity, entry.FlecsId));
-#endif
 }
 
 
 bool FlecsWorldClass::Has_Component_Raw(EntityId entity, ComponentTypeKey key) const
 {
-#ifdef OPENTS_EC_DISABLED
-	(void)entity;
-	(void)key;
-	return(false);
-#else
 	if (!Entity_Is_Alive(entity) || World == nullptr || State == nullptr) {
 		return(false);
 	}
@@ -750,16 +664,11 @@ bool FlecsWorldClass::Has_Component_Raw(EntityId entity, ComponentTypeKey key) c
 		return(false);
 	}
 	return(ecs_has_id(As_Const_World(World)->c_ptr(), entity, entry.FlecsId));
-#endif
 }
 
 
 void FlecsWorldClass::Remove_Component_Raw(EntityId entity, ComponentTypeKey key)
 {
-#ifdef OPENTS_EC_DISABLED
-	(void)entity;
-	(void)key;
-#else
 	if (!Entity_Is_Alive(entity) || World == nullptr || State == nullptr) {
 		return;
 	}
@@ -771,31 +680,23 @@ void FlecsWorldClass::Remove_Component_Raw(EntityId entity, ComponentTypeKey key
 	if (entry.FlecsId != 0 && ecs_has_id(As_World(World)->c_ptr(), entity, entry.FlecsId)) {
 		ecs_remove_id(As_World(World)->c_ptr(), entity, entry.FlecsId);
 	}
-#endif
 }
 
 
 void FlecsWorldClass::Begin_Scenario_Load(void)
 {
-#ifndef OPENTS_EC_DISABLED
 	Ensure_State().ScenarioLoading = true;
-#endif
 }
 
 
 bool FlecsWorldClass::Is_Scenario_Loading(void) const
 {
-#ifdef OPENTS_EC_DISABLED
-	return(false);
-#else
 	return(State != nullptr && State->ScenarioLoading);
-#endif
 }
 
 
 void FlecsWorldClass::Drain_Pending_Ready(void)
 {
-#ifndef OPENTS_EC_DISABLED
 	if (World == nullptr || State == nullptr || State->ScenarioLoading) {
 		return;
 	}
@@ -855,27 +756,21 @@ void FlecsWorldClass::Drain_Pending_Ready(void)
 		world->defer_end();
 		State->PendingDestroy.clear();
 	}
-#endif
 }
 
 
 void FlecsWorldClass::Flush_Scenario_Ready(void)
 {
-#ifndef OPENTS_EC_DISABLED
 	if (State == nullptr) {
 		return;
 	}
 	State->ScenarioLoading = false;
 	Drain_Pending_Ready();
-#endif
 }
 
 
 void FlecsWorldClass::Notify_Enter_World(EntityId entity)
 {
-#ifdef OPENTS_EC_DISABLED
-	(void)entity;
-#else
 	if (!Entity_Is_Alive(entity) || World == nullptr || State == nullptr) {
 		return;
 	}
@@ -909,15 +804,11 @@ void FlecsWorldClass::Notify_Enter_World(EntityId entity)
 		State->PendingDestroy.clear();
 		Drain_Pending_Ready();
 	}
-#endif
 }
 
 
 void FlecsWorldClass::Notify_Exit_World(EntityId entity)
 {
-#ifdef OPENTS_EC_DISABLED
-	(void)entity;
-#else
 	if (!Entity_Is_Alive(entity) || World == nullptr || State == nullptr) {
 		return;
 	}
@@ -951,15 +842,11 @@ void FlecsWorldClass::Notify_Exit_World(EntityId entity)
 		State->PendingDestroy.clear();
 		Drain_Pending_Ready();
 	}
-#endif
 }
 
 
 void FlecsWorldClass::Run_Sim_Phase(SimPhase phase)
 {
-#ifdef OPENTS_EC_DISABLED
-	(void)phase;
-#else
 	if (World == nullptr || State == nullptr) {
 		return;
 	}
@@ -1037,15 +924,11 @@ void FlecsWorldClass::Run_Sim_Phase(SimPhase phase)
 		State->PendingDestroy.clear();
 		Drain_Pending_Ready();
 	}
-#endif
 }
 
 
 void FlecsWorldClass::Render_Foreground(void * surface) const
 {
-#ifdef OPENTS_EC_DISABLED
-	(void)surface;
-#else
 	if (World == nullptr || State == nullptr) {
 		return;
 	}
@@ -1109,16 +992,11 @@ void FlecsWorldClass::Render_Foreground(void * surface) const
 			entry.Ops.RenderForeground(row.ComponentPtr, context, surface);
 		}
 	}
-#endif
 }
 
 
 void FlecsWorldClass::Detach_Target(AbstractClass const * target, bool all)
 {
-#ifdef OPENTS_EC_DISABLED
-	(void)target;
-	(void)all;
-#else
 	if (target == nullptr || World == nullptr || State == nullptr || !State->HasAnyDetach) {
 		return;
 	}
@@ -1154,15 +1032,11 @@ void FlecsWorldClass::Detach_Target(AbstractClass const * target, bool all)
 		State->PendingDestroy.clear();
 		Drain_Pending_Ready();
 	}
-#endif
 }
 
 
 void FlecsWorldClass::Fold_CRCs(CRCEngine & crc) const
 {
-#ifdef OPENTS_EC_DISABLED
-	(void)crc;
-#else
 	if (World == nullptr || State == nullptr) {
 		return;
 	}
@@ -1226,7 +1100,6 @@ void FlecsWorldClass::Fold_CRCs(CRCEngine & crc) const
 			entry.Ops.ComputeCRC(row.ComponentPtr, context, crc);
 		}
 	}
-#endif
 }
 
 
@@ -1236,42 +1109,6 @@ bool FlecsWorldClass::Serialize_Entity_Raw(EntityId entity, ComponentStreamAdapt
 		return(false);
 	}
 
-#ifdef OPENTS_EC_DISABLED
-	(void)entity;
-	if (io.IsSaving(io.Stream)) {
-		std::uint32_t count = 0;
-		io.SerializeBytes(io.Stream, &count, sizeof(count));
-		return(!io.WasError(io.Stream));
-	}
-	if (io.IsLoading(io.Stream)) {
-		std::uint32_t count = 0;
-		io.SerializeBytes(io.Stream, &count, sizeof(count));
-		if (io.WasError(io.Stream)) {
-			return(false);
-		}
-		std::uint64_t total_payload = 0;
-		for (std::uint32_t i = 0; i < count; ++i) {
-			std::uint32_t name_len = 0;
-			io.SerializeBytes(io.Stream, &name_len, sizeof(name_len));
-			if (io.WasError(io.Stream) || name_len > 4096 || !Skip_Stream_Bytes(io, name_len)) {
-				io.Fail(io.Stream);
-				return(false);
-			}
-			std::uint32_t payload_size = 0;
-			io.SerializeBytes(io.Stream, &payload_size, sizeof(payload_size));
-			if (io.WasError(io.Stream)) {
-				return(false);
-			}
-			total_payload += payload_size;
-		}
-		if (total_payload > static_cast<std::uint64_t>(io.Size(io.Stream) - io.Offset(io.Stream))) {
-			io.Fail(io.Stream);
-			return(false);
-		}
-		return(Skip_Stream_Bytes(io, static_cast<std::uint32_t>(total_payload)));
-	}
-	return(false);
-#else
 	if (io.IsSaving(io.Stream)) {
 		struct SaveItem {
 			BridgeState::RegisteredComponent const * Entry = nullptr;
@@ -1448,13 +1285,11 @@ bool FlecsWorldClass::Serialize_Entity_Raw(EntityId entity, ComponentStreamAdapt
 
 	io.Fail(io.Stream);
 	return(false);
-#endif
 }
 
 
 void FlecsWorldClass::Post_Load_Resolve_All(void)
 {
-#ifndef OPENTS_EC_DISABLED
 	if (World == nullptr || State == nullptr) {
 		return;
 	}
@@ -1511,7 +1346,6 @@ void FlecsWorldClass::Post_Load_Resolve_All(void)
 		State->PendingDestroy.clear();
 		Drain_Pending_Ready();
 	}
-#endif
 }
 
 

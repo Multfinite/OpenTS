@@ -31,8 +31,7 @@ class FlecsWorldClass
 
 		~FlecsWorldClass(void);
 
-		// Creates the entity for one game object and returns it, or zero when
-		// the EC build is disabled.
+		// Creates the entity for one game object and returns it.
 		EntityId Attach_Entity(void * object, char const * classname);
 
 		// Creates the child entity for one locomotor. Link_To_Object parents
@@ -80,7 +79,7 @@ class FlecsWorldClass
 		bool Is_Component_Registered(char const * name) const;
 
 		// Adds or overwrites component T on entity and returns its storage
-		// pointer, or nullptr when the entity is dead or EC is disabled.
+		// pointer, or nullptr when the entity is dead.
 		template<typename T>
 		T * Set_Component(EntityId entity, T value)
 		{
