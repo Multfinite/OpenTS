@@ -9,7 +9,7 @@
 
 #include "flecs/world.h"
 
-// The one EC world object. Its flecs world is created on first attach, not
-// here, because globals such as the CellClass BlubCell sentinel can attach
-// before this object is constructed.
-FlecsWorldClass FlecsWorld;
+// The one EC world object. Marked constinit so static storage initializes it
+// before any dynamic global constructor runs, while local world instances in
+// tests still zero their members cleanly.
+constinit FlecsWorldClass FlecsWorld;

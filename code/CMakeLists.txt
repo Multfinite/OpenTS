@@ -196,10 +196,6 @@ target_compile_definitions(OpenTS PRIVATE
     NOMINMAX
 )
 
-if(NOT OPENTS_EC)
-    target_compile_definitions(OpenTS PRIVATE OPENTS_EC_DISABLED)
-endif()
-
 #
 # ---------------------------------------------------------
 # Windows libraries and linker options
