@@ -9,12 +9,9 @@
 
 #pragma once
 
-// Lightweight (<flecs.h>-free) engine integration facade for all 12 global
-// hooks (G01..G12) and 27 entity/component hooks (E01..E27).
-//
-// Entity-scoped wrappers check Is_Materialized() inline before making any call
-// into engine_hooks.cpp, keeping unmaterialized objects, cells, and locomotors
-// down to a single zero-comparison branch.
+// Engine integration facade for global simulation/render/save/sync passes
+// (G01..G12) and entity-scoped events (E02..E27) operating directly on the
+// flecs::entity handle stored on ObjectClass, CellClass, and LocomotionClass.
 
 #include "coord.h"
 #include "ec/entity.h"
@@ -50,12 +47,6 @@ class CRCEngine;
 namespace EC::Hooks {
 
 // ---------------------------------------------------------------------------
-// Component Attachment Helpers (<flecs.h>-free facade for legacy TUs)
-// ---------------------------------------------------------------------------
-
-void Ensure_Produce_Cash(BuildingClass & self);
-
-// ---------------------------------------------------------------------------
 // Global Lifecycle, Frame, Render, Save/Load, and Sync Hooks (G01..G12)
 // ---------------------------------------------------------------------------
 
@@ -67,7 +58,7 @@ void Frame_End_All(void);                              // G05
 void Pre_Render_All(void);                             // G06
 void Post_Render_All(void);                            // G07
 void Scenario_Init_All(void);                          // G08
-void Scenario_Clear_All(void);                         // G09 (resets flecs::world)
+void Scenario_Clear_All(void);                         // G09 (component static cleanup; live roots keep 1:1 entities)
 bool Save_Trailer(SaveStreamClass & stream);           // G10a (EC01 trailer write)
 bool Load_Trailer(SaveStreamClass & stream);           // G10b (EC01 two-subpass load)
 void Post_Load_All(void);                              // G11 (after Swizzler.Resolve())
@@ -77,7 +68,7 @@ void Accumulate_Game_CRC(unsigned int & game_crc);     // G12c (Compute_Game_CRC
 void Shutdown_World(void);                             // Prog_End teardown
 
 // ---------------------------------------------------------------------------
-// Internal out-of-line slow paths (invoked only when Is_Materialized() == true)
+// Out-of-line component dispatchers (invoked when Has_User_Components == true)
 // ---------------------------------------------------------------------------
 
 namespace Detail {
@@ -88,8 +79,8 @@ void Dispatch_Loco_Detach(LocomotionClass & self, AbstractClass const * target, 
 
 void Dispatch_Object_Limbo(ObjectClass & self);
 void Dispatch_Object_Unlimbo(ObjectClass & self, Coord const & coord, Dir256 dir);
-void Dispatch_Loco_Limbo(LocomotionClass & self);
-void Dispatch_Loco_Unlimbo(LocomotionClass & self);
+void Dispatch_Loco_Limbo(ILocomotion & loco);
+void Dispatch_Loco_Unlimbo(ILocomotion & loco);
 void Dispatch_Delete_Me(ObjectClass & self);
 
 void Dispatch_Take_Damage(ObjectClass & self, int & damage, int distance, WarheadTypeClass const * warhead, TechnoClass * source, bool forced);
@@ -127,30 +118,28 @@ void Dispatch_Cell_Draw_It(CellClass const & self, Point2D const & point, Rect c
 void Dispatch_Draw_Overlay(CellClass & self, Point2D const & point, Rect const & cliprect);
 
 void Dispatch_Link_To_Object(LocomotionClass & self, FootClass * object);
-void Dispatch_Loco_Process(LocomotionClass & self);
-void Dispatch_Loco_PostProcess(LocomotionClass & self, bool moving);
-void Dispatch_Move_To(LocomotionClass & self, Coord to);
-void Dispatch_Stop_Moving(LocomotionClass & self);
+void Dispatch_Loco_Process(ILocomotion & loco);
+void Dispatch_Loco_PostProcess(ILocomotion & loco, bool moving);
+void Dispatch_Move_To(ILocomotion & loco, Coord to);
+void Dispatch_Stop_Moving(ILocomotion & loco);
 void Dispatch_Power_On(LocomotionClass & self);
 void Dispatch_Power_Off(LocomotionClass & self);
 void Dispatch_Begin_Piggyback(LocomotionClass & carrier, ILocomotion * carried);
 void Dispatch_End_Piggyback(LocomotionClass & carrier, ILocomotion * restored);
 void Dispatch_Draw_Matrix(LocomotionClass & self, Matrix3D & matrix, int * key);
 
-void Compute_Object_CRC(ObjectClass const & self, CRCEngine & crc);
-void Compute_Cell_CRC(CellClass const & self, CRCEngine & crc);
-void Compute_Loco_CRC(LocomotionClass const & self, CRCEngine & crc);
+void Compute_Entity_CRC(flecs::entity fe, CRCEngine & crc);
 
 } // namespace Detail
 
 // ---------------------------------------------------------------------------
-// Inline Fast-Path Entity Hook Wrappers (E02..E27)
+// Inline Entity Hook Wrappers Operating Directly on flecs::entity (E02..E27)
 // ---------------------------------------------------------------------------
 
 template<typename ObjT>
 inline void On_Object_Detach(ObjT & self, AbstractClass const * target, bool all)
 {
-	if (self.Components.Is_Materialized()) {
+	if (Has_User_Components(self.Entity)) {
 		Detail::Dispatch_Object_Detach(self, target, all);
 	}
 }
@@ -158,7 +147,7 @@ inline void On_Object_Detach(ObjT & self, AbstractClass const * target, bool all
 template<typename CellT>
 inline void On_Cell_Detach(CellT & self, AbstractClass const * target)
 {
-	if (self.Components.Is_Materialized()) {
+	if (Has_User_Components(self.Entity)) {
 		Detail::Dispatch_Cell_Detach(self, target);
 	}
 }
@@ -166,26 +155,25 @@ inline void On_Cell_Detach(CellT & self, AbstractClass const * target)
 template<typename LocoIface>
 inline void On_Loco_Detach(LocoIface & loco, AbstractClass const * target, bool all)
 {
-	auto & holder = loco.Components();
-	if (holder.Is_Materialized() && holder.Owner() != nullptr) {
-		Detail::Dispatch_Loco_Detach(*holder.Owner(), target, all);
+	if (Has_User_Components(Entity_Of(loco))) {
+		Detail::Dispatch_Loco_Detach(static_cast<LocomotionClass &>(loco), target, all);
 	}
 }
 
 template<typename ObjT>
 inline void On_Limbo(ObjT & self)
 {
-	if (self.Components.Is_Materialized()) {
+	self.Entity.add(flecs::Disabled);
+	if (Has_User_Components(self.Entity)) {
 		Detail::Dispatch_Object_Limbo(self);
 	}
-	self.Components.Set_Disabled(true);
 }
 
 template<typename ObjT>
 inline void On_Unlimbo(ObjT & self, Coord const & coord, Dir256 dir)
 {
-	self.Components.Set_Disabled(false);
-	if (self.Components.Is_Materialized()) {
+	self.Entity.remove(flecs::Disabled);
+	if (Has_User_Components(self.Entity)) {
 		Detail::Dispatch_Object_Unlimbo(self, coord, dir);
 	}
 }
@@ -193,36 +181,36 @@ inline void On_Unlimbo(ObjT & self, Coord const & coord, Dir256 dir)
 template<typename LocoIface>
 inline void On_Loco_Limbo(LocoIface & loco)
 {
-	auto & holder = loco.Components();
-	if (holder.Is_Materialized() && holder.Owner() != nullptr) {
-		Detail::Dispatch_Loco_Limbo(*holder.Owner());
+	flecs::entity fe = Entity_Of(loco);
+	fe.add(flecs::Disabled);
+	if (Has_User_Components(fe)) {
+		Detail::Dispatch_Loco_Limbo(loco);
 	}
-	holder.Set_Disabled(true);
 }
 
 template<typename LocoIface>
 inline void On_Loco_Unlimbo(LocoIface & loco)
 {
-	auto & holder = loco.Components();
-	holder.Set_Disabled(false);
-	if (holder.Is_Materialized() && holder.Owner() != nullptr) {
-		Detail::Dispatch_Loco_Unlimbo(*holder.Owner());
+	flecs::entity fe = Entity_Of(loco);
+	fe.remove(flecs::Disabled);
+	if (Has_User_Components(fe)) {
+		Detail::Dispatch_Loco_Unlimbo(loco);
 	}
 }
 
 template<typename ObjT>
 inline void On_Delete_Me(ObjT & self)
 {
-	if (self.Components.Is_Materialized()) {
+	if (Has_User_Components(self.Entity)) {
 		Detail::Dispatch_Delete_Me(self);
 	}
-	self.Components.Set_Disabled(true);
+	self.Entity.add(flecs::Disabled);
 }
 
 template<typename ObjT>
 inline void On_Take_Damage(ObjT & self, int & damage, int distance, WarheadTypeClass const * warhead, TechnoClass * source, bool forced)
 {
-	if (self.Components.Is_Materialized()) {
+	if (Has_User_Components(self.Entity)) {
 		Detail::Dispatch_Take_Damage(self, damage, distance, warhead, source, forced);
 	}
 }
@@ -230,7 +218,7 @@ inline void On_Take_Damage(ObjT & self, int & damage, int distance, WarheadTypeC
 template<typename TechT>
 inline void On_Can_Fire(TechT const & self, AbstractClass * target, int which, FireErrorType & verdict)
 {
-	if (self.Components.Is_Materialized()) {
+	if (Has_User_Components(self.Entity)) {
 		Detail::Dispatch_Can_Fire(self, target, which, verdict);
 	}
 }
@@ -238,7 +226,7 @@ inline void On_Can_Fire(TechT const & self, AbstractClass * target, int which, F
 template<typename TechT>
 inline void On_Fire_At(TechT & self, AbstractClass * target, int which, BulletClass * bullet)
 {
-	if (self.Components.Is_Materialized()) {
+	if (Has_User_Components(self.Entity)) {
 		Detail::Dispatch_Fire_At(self, target, which, bullet);
 	}
 }
@@ -246,7 +234,7 @@ inline void On_Fire_At(TechT & self, AbstractClass * target, int which, BulletCl
 template<typename TechT>
 inline void On_Record_The_Kill(TechT & self, TechnoClass * source)
 {
-	if (self.Components.Is_Materialized()) {
+	if (Has_User_Components(self.Entity)) {
 		Detail::Dispatch_Record_The_Kill(self, source);
 	}
 }
@@ -254,7 +242,7 @@ inline void On_Record_The_Kill(TechT & self, TechnoClass * source)
 template<typename TechT>
 inline void On_Captured(TechT & self, HouseClass * oldowner, HouseClass * newowner)
 {
-	if (self.Components.Is_Materialized()) {
+	if (Has_User_Components(self.Entity)) {
 		Detail::Dispatch_Captured(self, oldowner, newowner);
 	}
 }
@@ -262,7 +250,7 @@ inline void On_Captured(TechT & self, HouseClass * oldowner, HouseClass * newown
 template<typename TechT>
 inline void On_Assign_Target(TechT & self, AbstractClass * target)
 {
-	if (self.Components.Is_Materialized()) {
+	if (Has_User_Components(self.Entity)) {
 		Detail::Dispatch_Assign_Target(self, target);
 	}
 }
@@ -270,7 +258,7 @@ inline void On_Assign_Target(TechT & self, AbstractClass * target)
 template<typename TechT>
 inline void On_Assign_Destination(TechT & self, AbstractClass * dest)
 {
-	if (self.Components.Is_Materialized()) {
+	if (Has_User_Components(self.Entity)) {
 		Detail::Dispatch_Assign_Destination(self, dest);
 	}
 }
@@ -278,7 +266,7 @@ inline void On_Assign_Destination(TechT & self, AbstractClass * dest)
 template<typename ObjT>
 inline void On_Set_Coord(ObjT & self, Coord const & old_coord, Coord const & new_coord)
 {
-	if (self.Components.Is_Materialized()) {
+	if (Has_User_Components(self.Entity)) {
 		Detail::Dispatch_Set_Coord(self, old_coord, new_coord);
 	}
 }
@@ -286,7 +274,7 @@ inline void On_Set_Coord(ObjT & self, Coord const & old_coord, Coord const & new
 template<typename FootT>
 inline void On_Per_Cell_Process(FootT & self, PCPType why)
 {
-	if (self.Components.Is_Materialized()) {
+	if (Has_User_Components(self.Entity)) {
 		Detail::Dispatch_Per_Cell_Process(self, why);
 	}
 }
@@ -294,7 +282,7 @@ inline void On_Per_Cell_Process(FootT & self, PCPType why)
 template<typename ObjT>
 inline void On_Receive_Message(ObjT & self, RadioClass * from, RadioMessageType message, std::intptr_t & param)
 {
-	if (self.Components.Is_Materialized()) {
+	if (Has_User_Components(self.Entity)) {
 		Detail::Dispatch_Receive_Message(self, from, message, param);
 	}
 }
@@ -302,7 +290,7 @@ inline void On_Receive_Message(ObjT & self, RadioClass * from, RadioMessageType 
 template<typename TechT>
 inline void On_Do_Cloak(TechT & self)
 {
-	if (self.Components.Is_Materialized()) {
+	if (Has_User_Components(self.Entity)) {
 		Detail::Dispatch_Do_Cloak(self);
 	}
 }
@@ -310,7 +298,7 @@ inline void On_Do_Cloak(TechT & self)
 template<typename TechT>
 inline void On_Do_Uncloak(TechT & self)
 {
-	if (self.Components.Is_Materialized()) {
+	if (Has_User_Components(self.Entity)) {
 		Detail::Dispatch_Do_Uncloak(self);
 	}
 }
@@ -318,7 +306,7 @@ inline void On_Do_Uncloak(TechT & self)
 template<typename TechT>
 inline void On_Stun(TechT & self)
 {
-	if (self.Components.Is_Materialized()) {
+	if (Has_User_Components(self.Entity)) {
 		Detail::Dispatch_Stun(self);
 	}
 }
@@ -326,7 +314,7 @@ inline void On_Stun(TechT & self)
 template<typename ObjT>
 inline void On_Select(ObjT & self)
 {
-	if (self.Components.Is_Materialized()) {
+	if (Has_User_Components(self.Entity)) {
 		Detail::Dispatch_Select(self);
 	}
 }
@@ -334,7 +322,7 @@ inline void On_Select(ObjT & self)
 template<typename ObjT>
 inline void On_Unselect(ObjT & self)
 {
-	if (self.Components.Is_Materialized()) {
+	if (Has_User_Components(self.Entity)) {
 		Detail::Dispatch_Unselect(self);
 	}
 }
@@ -342,7 +330,7 @@ inline void On_Unselect(ObjT & self)
 template<typename ObjT>
 inline void On_Hidden(ObjT & self)
 {
-	if (self.Components.Is_Materialized()) {
+	if (Has_User_Components(self.Entity)) {
 		Detail::Dispatch_Hidden(self);
 	}
 }
@@ -350,7 +338,7 @@ inline void On_Hidden(ObjT & self)
 template<typename ObjT>
 inline void On_Revealed(ObjT & self, HouseClass * house)
 {
-	if (self.Components.Is_Materialized()) {
+	if (Has_User_Components(self.Entity)) {
 		Detail::Dispatch_Revealed(self, house);
 	}
 }
@@ -358,7 +346,7 @@ inline void On_Revealed(ObjT & self, HouseClass * house)
 template<typename BldT>
 inline void On_Grand_Opening(BldT & self, bool captured)
 {
-	if (self.Components.Is_Materialized()) {
+	if (Has_User_Components(self.Entity)) {
 		Detail::Dispatch_Grand_Opening(self, captured);
 	}
 }
@@ -366,7 +354,7 @@ inline void On_Grand_Opening(BldT & self, bool captured)
 template<typename ObjT>
 inline void On_Draw_Pre_Render(ObjT const & self, Point2D const & point, Rect const & cliprect)
 {
-	if (self.Components.Is_Materialized()) {
+	if (Has_User_Components(self.Entity)) {
 		Detail::Dispatch_Draw_Pre_Render(self, point, cliprect);
 	}
 }
@@ -374,7 +362,7 @@ inline void On_Draw_Pre_Render(ObjT const & self, Point2D const & point, Rect co
 template<typename ObjT>
 inline void On_Draw_It(ObjT const & self, Point2D const & point, Rect const & cliprect)
 {
-	if (self.Components.Is_Materialized()) {
+	if (Has_User_Components(self.Entity)) {
 		Detail::Dispatch_Draw_It(self, point, cliprect);
 	}
 }
@@ -382,7 +370,7 @@ inline void On_Draw_It(ObjT const & self, Point2D const & point, Rect const & cl
 template<typename ObjT>
 inline void On_Draw_Post_Render(ObjT const & self, Point2D const & point, Rect const & cliprect)
 {
-	if (self.Components.Is_Materialized()) {
+	if (Has_User_Components(self.Entity)) {
 		Detail::Dispatch_Draw_Post_Render(self, point, cliprect);
 	}
 }
@@ -390,7 +378,7 @@ inline void On_Draw_Post_Render(ObjT const & self, Point2D const & point, Rect c
 template<typename CellT>
 inline void On_Occupy_Down(CellT & self, ObjectClass * object, bool bridge)
 {
-	if (self.Components.Is_Materialized()) {
+	if (Has_User_Components(self.Entity)) {
 		Detail::Dispatch_Occupy_Down(self, object, bridge);
 	}
 }
@@ -398,7 +386,7 @@ inline void On_Occupy_Down(CellT & self, ObjectClass * object, bool bridge)
 template<typename CellT>
 inline void On_Occupy_Up(CellT & self, ObjectClass * object, bool bridge)
 {
-	if (self.Components.Is_Materialized()) {
+	if (Has_User_Components(self.Entity)) {
 		Detail::Dispatch_Occupy_Up(self, object, bridge);
 	}
 }
@@ -406,7 +394,7 @@ inline void On_Occupy_Up(CellT & self, ObjectClass * object, bool bridge)
 template<typename CellT>
 inline void On_Recalc_Passability(CellT & self)
 {
-	if (self.Components.Is_Materialized()) {
+	if (Has_User_Components(self.Entity)) {
 		Detail::Dispatch_Recalc_Passability(self);
 	}
 }
@@ -414,7 +402,7 @@ inline void On_Recalc_Passability(CellT & self)
 template<typename CellT>
 inline void On_Recalc_Attributes(CellT & self)
 {
-	if (self.Components.Is_Materialized()) {
+	if (Has_User_Components(self.Entity)) {
 		Detail::Dispatch_Recalc_Attributes(self);
 	}
 }
@@ -422,7 +410,7 @@ inline void On_Recalc_Attributes(CellT & self)
 template<typename CellT>
 inline void On_Grow_Tiberium(CellT & self)
 {
-	if (self.Components.Is_Materialized()) {
+	if (Has_User_Components(self.Entity)) {
 		Detail::Dispatch_Grow_Tiberium(self);
 	}
 }
@@ -430,7 +418,7 @@ inline void On_Grow_Tiberium(CellT & self)
 template<typename CellT>
 inline void On_Spread_Tiberium(CellT & self, bool forced)
 {
-	if (self.Components.Is_Materialized()) {
+	if (Has_User_Components(self.Entity)) {
 		Detail::Dispatch_Spread_Tiberium(self, forced);
 	}
 }
@@ -438,7 +426,7 @@ inline void On_Spread_Tiberium(CellT & self, bool forced)
 template<typename CellT>
 inline void On_Reduce_Tiberium(CellT & self, int levels)
 {
-	if (self.Components.Is_Materialized()) {
+	if (Has_User_Components(self.Entity)) {
 		Detail::Dispatch_Reduce_Tiberium(self, levels);
 	}
 }
@@ -446,7 +434,7 @@ inline void On_Reduce_Tiberium(CellT & self, int levels)
 template<typename CellT>
 inline void On_Goodie_Check(CellT & self, FootClass * object)
 {
-	if (self.Components.Is_Materialized()) {
+	if (Has_User_Components(self.Entity)) {
 		Detail::Dispatch_Goodie_Check(self, object);
 	}
 }
@@ -454,7 +442,7 @@ inline void On_Goodie_Check(CellT & self, FootClass * object)
 template<typename CellT>
 inline void On_Cell_Draw_It(CellT const & self, Point2D const & point, Rect const & cliprect)
 {
-	if (self.Components.Is_Materialized()) {
+	if (Has_User_Components(self.Entity)) {
 		Detail::Dispatch_Cell_Draw_It(self, point, cliprect);
 	}
 }
@@ -462,82 +450,75 @@ inline void On_Cell_Draw_It(CellT const & self, Point2D const & point, Rect cons
 template<typename CellT>
 inline void On_Draw_Overlay(CellT & self, Point2D const & point, Rect const & cliprect)
 {
-	if (self.Components.Is_Materialized()) {
+	if (Has_User_Components(self.Entity)) {
 		Detail::Dispatch_Draw_Overlay(self, point, cliprect);
 	}
 }
 
-template<typename LocoIface>
-inline void On_Link_To_Object(LocoIface & loco, FootClass * object)
+template<typename LocoT>
+inline void On_Link_To_Object(LocoT & self, FootClass * object)
 {
-	auto & holder = loco.Components();
-	if (holder.Is_Materialized() && holder.Owner() != nullptr) {
-		Detail::Dispatch_Link_To_Object(*holder.Owner(), object);
+	if (Has_User_Components(self.Entity)) {
+		Detail::Dispatch_Link_To_Object(self, object);
 	}
 }
 
 template<typename LocoIface>
 inline void On_Loco_Process(LocoIface & loco)
 {
-	auto & holder = loco.Components();
-	if (holder.Is_Materialized() && holder.Owner() != nullptr) {
-		Detail::Dispatch_Loco_Process(*holder.Owner());
+	if (Has_User_Components(Entity_Of(loco))) {
+		Detail::Dispatch_Loco_Process(loco);
 	}
 }
 
 template<typename LocoIface>
 inline void On_Loco_PostProcess(LocoIface & loco, bool moving)
 {
-	auto & holder = loco.Components();
-	if (holder.Is_Materialized() && holder.Owner() != nullptr) {
-		Detail::Dispatch_Loco_PostProcess(*holder.Owner(), moving);
+	if (Has_User_Components(Entity_Of(loco))) {
+		Detail::Dispatch_Loco_PostProcess(loco, moving);
 	}
 }
 
 template<typename LocoIface>
 inline void On_Move_To(LocoIface & loco, Coord to)
 {
-	auto & holder = loco.Components();
-	if (holder.Is_Materialized() && holder.Owner() != nullptr) {
-		Detail::Dispatch_Move_To(*holder.Owner(), to);
+	if (Has_User_Components(Entity_Of(loco))) {
+		Detail::Dispatch_Move_To(loco, to);
 	}
 }
 
 template<typename LocoIface>
 inline void On_Stop_Moving(LocoIface & loco)
 {
-	auto & holder = loco.Components();
-	if (holder.Is_Materialized() && holder.Owner() != nullptr) {
-		Detail::Dispatch_Stop_Moving(*holder.Owner());
+	if (Has_User_Components(Entity_Of(loco))) {
+		Detail::Dispatch_Stop_Moving(loco);
 	}
 }
 
-template<typename LocoIface>
-inline void On_Power_On(LocoIface & loco)
+template<typename LocoT>
+inline void On_Power_On(LocoT & self)
 {
-	auto & holder = loco.Components();
-	if (holder.Is_Materialized() && holder.Owner() != nullptr) {
-		Detail::Dispatch_Power_On(*holder.Owner());
+	if (Has_User_Components(self.Entity)) {
+		Detail::Dispatch_Power_On(self);
 	}
 }
 
-template<typename LocoIface>
-inline void On_Power_Off(LocoIface & loco)
+template<typename LocoT>
+inline void On_Power_Off(LocoT & self)
 {
-	auto & holder = loco.Components();
-	if (holder.Is_Materialized() && holder.Owner() != nullptr) {
-		Detail::Dispatch_Power_Off(*holder.Owner());
+	if (Has_User_Components(self.Entity)) {
+		Detail::Dispatch_Power_Off(self);
 	}
 }
 
-template<typename CarrierLoco>
-inline void On_Begin_Piggyback(CarrierLoco & carrier, ILocomotion * carried)
+template<typename LocoT>
+inline void On_Begin_Piggyback(LocoT & carrier, ILocomotion * carried)
 {
 	Detail::Dispatch_Begin_Piggyback(carrier, carried);
 }
 
-template<typename CarrierLoco>
-inline void On_End_Piggyback(CarrierLoco & carrier, ILocomotion * restored)
+template<typename LocoT>
+inline void On_End_Piggyback(LocoT & carrier, ILocomotion * restored)
 {
 	Detail::Dispatch_End_Piggyback(carrier, restored);
 }
@@ -545,7 +526,7 @@ inline void On_End_Piggyback(CarrierLoco & carrier, ILocomotion * restored)
 template<typename LocoT>
 inline void On_Draw_Matrix(LocoT & self, Matrix3D & matrix, int * key)
 {
-	if (self.Components().Is_Materialized()) {
+	if (Has_User_Components(self.Entity)) {
 		Detail::Dispatch_Draw_Matrix(self, matrix, key);
 	}
 }
@@ -553,25 +534,25 @@ inline void On_Draw_Matrix(LocoT & self, Matrix3D & matrix, int * key)
 template<typename ObjT>
 inline void Compute_Object_CRC(ObjT const & self, CRCEngine & crc)
 {
-	if (self.Components.Is_Materialized()) {
-		Detail::Compute_Object_CRC(self, crc);
+	if (Has_User_Components(self.Entity)) {
+		Detail::Compute_Entity_CRC(self.Entity, crc);
 	}
 }
 
 template<typename CellT>
 inline void Compute_Cell_CRC(CellT const & self, CRCEngine & crc)
 {
-	if (self.Components.Is_Materialized()) {
-		Detail::Compute_Cell_CRC(self, crc);
+	if (Has_User_Components(self.Entity)) {
+		Detail::Compute_Entity_CRC(self.Entity, crc);
 	}
 }
 
 template<typename LocoIface>
 inline void Compute_Loco_CRC(LocoIface const & loco, CRCEngine & crc)
 {
-	auto const & holder = loco.Components();
-	if (holder.Is_Materialized() && holder.Owner() != nullptr) {
-		Detail::Compute_Loco_CRC(*holder.Owner(), crc);
+	flecs::entity fe = Entity_Of(loco);
+	if (Has_User_Components(fe)) {
+		Detail::Compute_Entity_CRC(fe, crc);
 	}
 }
 

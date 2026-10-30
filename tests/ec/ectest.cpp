@@ -8,12 +8,12 @@
  ******************************************************************************/
 
 // Holds the static C++20 entity-component layer to its contract over the real
-// flecs storage: lazy TypedEntity<Root> handles across ObjectClass, CellClass,
-// and LocomotionClass, compile-time ComponentRegistry<Ts...> dispatch across
-// all 12 global hooks (G01..G12) and 27 entity/component hooks (E01..E27),
-// automatic flecs::Disabled suspension, two-subpass EC01 save trailer framing
-// with pointer swizzle stability, and per-component / per-entity / per-type
-// Compute_CRC calculation.
+// flecs storage: 1:1 flecs::entity root lifetime across ObjectClass, CellClass,
+// and LocomotionClass, native flecs paradigm accessors and observers, compile-time
+// ComponentRegistry<Ts...> dispatch across all 12 global hooks (G01..G12) and
+// 27 entity/component hooks (E01..E27), automatic flecs::Disabled suspension,
+// two-subpass EC01 save trailer framing with pointer swizzle stability, and
+// per-component / per-entity / per-type / global Compute_CRC calculation.
 //
 // Needs no game data.
 
@@ -50,6 +50,7 @@ class RadioClass {};
 class AbstractClass
 {
 	public:
+		virtual ~AbstractClass(void) = default;
 		int ID = 1;
 		int Fetch_ID(void) const { return ID; }
 };
@@ -57,49 +58,85 @@ class AbstractClass
 class ObjectClass : public AbstractClass
 {
 	public:
-		explicit ObjectClass(int id = 1) : Components(this) { ID = id; }
+		explicit ObjectClass(int id = 1, bool start_in_limbo = false)
+			: Entity(EC::Create_Entity(this))
+		{
+			ID = id;
+			if (start_in_limbo) {
+				Entity.add(flecs::Disabled);
+			}
+		}
+
+		~ObjectClass(void) override
+		{
+			EC::Destroy_Entity(Entity);
+		}
+
 		int Strength = 100;
-		EC::TypedEntity<ObjectClass> Components;
+		flecs::entity Entity;
 };
 
 class TechnoClass : public ObjectClass
 {
 	public:
-		explicit TechnoClass(int id = 1) : ObjectClass(id) {}
+		explicit TechnoClass(int id = 1, bool start_in_limbo = false)
+			: ObjectClass(id, start_in_limbo)
+		{
+		}
 };
 
 class FootClass : public TechnoClass
 {
 	public:
-		explicit FootClass(int id = 1) : TechnoClass(id) {}
+		explicit FootClass(int id = 1, bool start_in_limbo = false)
+			: TechnoClass(id, start_in_limbo)
+		{
+		}
 };
 
 class CellClass : public AbstractClass
 {
 	public:
-		explicit CellClass(int cell_index = 0) : CellIndex(cell_index), Components(this) { ID = cell_index; }
+		explicit CellClass(int cell_index = 0)
+			: CellIndex(cell_index), Entity(EC::Create_Entity(this))
+		{
+			ID = cell_index;
+		}
+
+		~CellClass(void) override
+		{
+			EC::Destroy_Entity(Entity);
+		}
+
 		int CellIndex = 0;
 		int Tiberium = 10;
-		EC::TypedEntity<CellClass> Components;
+		flecs::entity Entity;
 };
 
 struct ILocomotion
 {
 	virtual ~ILocomotion(void) = default;
-	virtual EC::TypedEntity<LocomotionClass> & Components(void) noexcept = 0;
-	virtual EC::TypedEntity<LocomotionClass> const & Components(void) const noexcept = 0;
+	virtual flecs::entity Get_Entity(void) const noexcept = 0;
 };
 
 class LocomotionClass : public ILocomotion
 {
 	public:
-		explicit LocomotionClass(FootClass * linked = nullptr) : LinkedTo(linked), CompHolder(this) {}
+		explicit LocomotionClass(FootClass * linked = nullptr)
+			: Entity(EC::Create_Entity(this)), LinkedTo(linked)
+		{
+		}
+
+		~LocomotionClass(void) override
+		{
+			EC::Destroy_Entity(Entity);
+		}
+
+		flecs::entity Get_Entity(void) const noexcept override { return Entity; }
+
+		flecs::entity Entity;
 		FootClass * LinkedTo = nullptr;
 		bool IsPowered = true;
-		EC::TypedEntity<LocomotionClass> CompHolder;
-
-		EC::TypedEntity<LocomotionClass> & Components(void) noexcept override { return CompHolder; }
-		EC::TypedEntity<LocomotionClass> const & Components(void) const noexcept override { return CompHolder; }
 };
 
 // Stand-in swizzle and save stream matching SaveStreamClass's contract, including
@@ -272,8 +309,8 @@ class SaveStreamClass
 		bool Failed;
 };
 
-// Global sentinel constructed at static initialization time before main(),
-// reproducing code/map.cpp's `CellClass BlubCell;`.
+// Global sentinel constructed BEFORE main() AND before Set_World_Init_Hook,
+// reproducing code/map.cpp's global `CellClass BlubCell;` static init order!
 static CellClass StaticBlubCellSentinel(9999);
 
 namespace {
@@ -281,7 +318,7 @@ namespace {
 int GScenarioClears = 0;
 std::vector<std::string> GOrderLog;
 
-// 1. Generic component (works on any root, exercises void / EntityView global hooks)
+// 1. Generic component (works on any root, exercises void / flecs::entity global & observer hooks)
 struct GenericPulseComp
 {
 	static constexpr std::string_view SaveName = "Test.GenericPulse";
@@ -298,11 +335,11 @@ struct GenericPulseComp
 	int Attached = 0;
 	static inline int Removed = 0;
 
-	void On_Attach(EC::EntityView) { ++Attached; }
-	void On_Remove(EC::EntityView) { ++Removed; }
+	void On_Attach(flecs::entity) { ++Attached; }
+	void On_Remove(flecs::entity) { ++Removed; }
 
 	void AI(void) { ++Ticks; GOrderLog.push_back("Generic.AI"); }
-	void PostAI(EC::EntityView) { ++PostTicks; GOrderLog.push_back("Generic.PostAI"); }
+	void PostAI(flecs::entity) { ++PostTicks; GOrderLog.push_back("Generic.PostAI"); }
 	void Environment_AI(void) { ++EnvTicks; }
 	void Frame_Begin(void) { ++FrameBegins; }
 	void Frame_End(void) { ++FrameEnds; }
@@ -336,9 +373,10 @@ struct ObjectShieldComp
 	ObjectClass * LinkedPeer = nullptr;
 	int EventsMask = 0;
 	bool BlockFire = false;
+	static inline int DestroyedOwners = 0;
 
 	void On_Attach(ObjectClass & self) { self.Strength += 5; }
-	void On_Remove(ObjectClass & self) { self.Strength -= 5; }
+	void On_Remove(ObjectClass & self) { self.Strength -= 5; ++DestroyedOwners; }
 
 	void AI(ObjectClass & self)
 	{
@@ -513,12 +551,16 @@ struct UnregisteredComp
 	LocoOverdriveComp, \
 	PassiveDataComp
 
-#include "ec/entity_inl.h"
 #include "ec/registry.h"
 
 namespace {
 
 using TestRegistry = EC::GameComponents;
+
+void Register_Test_Components(flecs::world & world)
+{
+	TestRegistry::Register_All(world);
+}
 
 // Compile-time static typing guarantees:
 static_assert(TestRegistry::count == 5);
@@ -547,92 +589,142 @@ void Check(bool passed, char const * what)
 	}
 }
 
-void Test_Lazy_Lifecycle_And_Cell_Anomalies(void)
+std::size_t Count_Root_Entities(void)
 {
-	EC::World_Reset();
-	TestRegistry::Register_All(EC::World());
+	std::size_t total = 0;
+	EC::World().query_builder<EC::OwnerLink<ObjectClass> const>().term_at(0).flags(flecs::Self).with(flecs::Disabled).optional().each([&](EC::OwnerLink<ObjectClass> const &) { ++total; });
+	EC::World().query_builder<EC::OwnerLink<CellClass> const>().term_at(0).flags(flecs::Self).with(flecs::Disabled).optional().each([&](EC::OwnerLink<CellClass> const &) { ++total; });
+	EC::World().query_builder<EC::OwnerLink<LocomotionClass> const>().term_at(0).flags(flecs::Self).with(flecs::Disabled).optional().each([&](EC::OwnerLink<LocomotionClass> const &) { ++total; });
+	return total;
+}
 
-	// 1. Static sentinel constructed before main() did not touch flecs::world.
-	Check(!StaticBlubCellSentinel.Components.Is_Materialized(), "static BlubCell starts unmaterialized");
-	Check(EC::Live_Entity_Count() == 0, "zero live entities before first Emplace");
+void Test_Eager_1To1_Lifecycle_And_Cell_Operations(void)
+{
+	// 1. Static sentinel constructed BEFORE Set_World_Init_Hook already owns its 1:1 flecs::entity!
+	Check(StaticBlubCellSentinel.Entity.id() != 0 && StaticBlubCellSentinel.Entity.is_alive(),
+		"static BlubCell constructed before main() owns a live 1:1 flecs::entity");
+	Check(StaticBlubCellSentinel.Entity.get<EC::OwnerLink<CellClass>>().ptr == &StaticBlubCellSentinel,
+		"static BlubCell OwnerLink points to StaticBlubCellSentinel");
+	Check(!EC::Has_User_Components(StaticBlubCellSentinel.Entity),
+		"plain BlubCell has Has_User_Components == false");
+	Check(Count_Root_Entities() == 1, "exactly 1 root entity (StaticBlubCellSentinel) before test roots");
 
-	// 2. Lazy materialization on first component addition + On_Attach / On_Remove.
-	FootClass unit(10);
-	Check(!unit.Components.Is_Materialized(), "ObjectClass starts with id == 0");
-	auto & shield = unit.Components.Emplace<ObjectShieldComp>();
-	Check(unit.Components.Is_Materialized(), "Emplace materializes entity");
-	Check(unit.Strength == 105, "On_Attach mutated ObjectClass owner statically");
-	Check(EC::Live_Entity_Count() == 1, "one live entity after Emplace");
-	shield.Shield = 35;
-	Check(unit.Components.Get<ObjectShieldComp>().Shield == 35, "Get<C> reads live slot");
-
-	unit.Components.Emplace<PassiveDataComp>(PassiveDataComp{77});
-	Check(unit.Components.Has<PassiveDataComp>(), "passive component attached");
-	Check(unit.Components.Try_Get<PassiveDataComp>()->TagValue == 77, "Try_Get<C> reads passive slot");
-
-	unit.Components.Remove<ObjectShieldComp>();
-	Check(!unit.Components.Has<ObjectShieldComp>(), "Remove<C> detaches component");
-	Check(unit.Strength == 100, "On_Remove ran on Remove<C>");
-
-	// 3. Cell placement-new Reset() and Set_Map_Dimensions shift transfer.
-	CellClass cell_a(101);
-	cell_a.Components.Emplace<CellHazardComp>(CellHazardComp{4, 0});
-	Check(EC::Live_Entity_Count() == 2, "two entities with unit + cell_a");
-
-	// Simulate Set_Map_Dimensions shift from cell_a to cell_b:
-	EC::DetachedEntitySlot saved_slot(cell_a.Components.Release_Id());
-	Check(!cell_a.Components.Is_Materialized(), "Release_Id clears old cell handle");
-	cell_a.Components.Reset();
-	new (&cell_a) CellClass(101);
-
-	CellClass cell_b(202);
-	cell_b = cell_a; // copy-assignment must NOT duplicate or corrupt entity handles
-	Check(cell_b.Components.Owner() == &cell_b, "copy-assignment preserves destination owner pointer");
-	cell_b.Components.Adopt_Id(saved_slot.Release());
-	Check(cell_b.Components.Is_Materialized(), "Adopt_Id attaches entity to shifted cell");
-
-	TestRegistry::AI_All(EC::World());
-	Check(cell_b.Tiberium == 14, "OwnerLink<CellClass> rebound to shifted cell_b address");
-	Check(cell_a.Tiberium == 10, "old cell_a untouched after shift");
-
-	// Orphaned DetachedEntitySlot destroys unclaimed entity automatically.
+	// 2. 1:1 constructor/destructor lifecycle + native flecs add/emplace/set/get/remove + observers.
+	ObjectShieldComp::DestroyedOwners = 0;
+	flecs::entity_t destroyed_unit_id = 0;
 	{
-		CellClass trimmed(303);
-		trimmed.Components.Emplace<CellHazardComp>();
-		Check(EC::Live_Entity_Count() == 3, "three entities before trim");
-		EC::DetachedEntitySlot dropped(trimmed.Components.Release_Id());
+		FootClass unit(10, /*start_in_limbo=*/true);
+		destroyed_unit_id = unit.Entity.id();
+		Check(unit.Entity.is_alive() && unit.Entity.has(flecs::Disabled),
+			"ObjectClass constructor creates live flecs::entity immediately (with Disabled in limbo)");
+		Check(!EC::Has_User_Components(unit.Entity),
+			"Has_User_Components ignores OwnerLink + flecs::Disabled on plain limbo object");
+		Check(Count_Root_Entities() == 2, "two live root entities after FootClass construction");
+
+		unit.Entity.add<ObjectShieldComp>();
+		Check(EC::Has_User_Components(unit.Entity), "Has_User_Components becomes true when component added");
+		Check(unit.Strength == 105, "native flecs on_add observer ran On_Attach(ObjectClass&)");
+
+		auto & shield = unit.Entity.get_mut<ObjectShieldComp>();
+		shield.Shield = 35;
+		Check(unit.Entity.get<ObjectShieldComp>().Shield == 35, "native flecs::entity::get<C>() reads live slot");
+
+		unit.Entity.set<PassiveDataComp>({77});
+		Check(unit.Entity.has<PassiveDataComp>() && unit.Entity.try_get<PassiveDataComp>()->TagValue == 77,
+			"native flecs::entity::set<C> / has<C> / try_get<C> work directly");
+
+		unit.Entity.remove<ObjectShieldComp>();
+		Check(!unit.Entity.has<ObjectShieldComp>(), "native flecs::entity::remove<C> detaches component");
+		Check(unit.Strength == 100 && ObjectShieldComp::DestroyedOwners == 1,
+			"native flecs on_remove observer ran On_Remove(ObjectClass&) on remove<C>");
+
+		unit.Entity.remove<PassiveDataComp>();
+		Check(!EC::Has_User_Components(unit.Entity),
+			"Has_User_Components returns to false once all user components are removed");
+
+		// Re-add ObjectShieldComp so ~FootClass() exercises destructor 1:1 teardown + on_remove!
+		unit.Entity.add<ObjectShieldComp>();
+		Check(unit.Strength == 105, "re-added ObjectShieldComp before ~FootClass()");
 	}
-	Check(EC::Live_Entity_Count() == 2, "dropped DetachedEntitySlot freed trimmed cell entity");
+	Check(!EC::World().entity(destroyed_unit_id).is_alive(),
+		"~ObjectClass() destroyed flecs::entity 1:1 immediately on scope exit");
+	Check(ObjectShieldComp::DestroyedOwners == 2,
+		"destroying root entity fired native flecs on_remove observer");
+	Check(Count_Root_Entities() == 1, "root entity count returned to 1 after ~FootClass()");
+
+	// 3. Cell placement-new (Destroy_Entity + new (ptr) CellClass) and Set_Map_Dimensions shift.
+	{
+		CellClass cell_a(101);
+		cell_a.Entity.set<CellHazardComp>({4, 0});
+		Check(Count_Root_Entities() == 2, "two root entities with StaticBlubCell + cell_a");
+
+		// Simulate Set_Map_Dimensions(!reset_cells) shift from cell_a to cell_b:
+		flecs::entity shifted = cell_a.Entity;
+		cell_a.Entity = flecs::entity::null();
+		EC::Destroy_Entity(cell_a.Entity);
+		new (&cell_a) CellClass(101);
+
+		CellClass cell_b(202);
+		Check(Count_Root_Entities() == 4, "cell_a (rebuilt) + shifted + cell_b + BlubCell before adoption");
+
+		EC::Destroy_Entity(cell_b.Entity);
+		cell_b = cell_a;
+		cell_b.CellIndex = 202;
+		cell_b.Entity = shifted;
+		shifted = flecs::entity::null();
+		cell_b.Entity.set<EC::OwnerLink<CellClass>>({&cell_b});
+		// Give cell_a a fresh entity since *cell_b = cell_a copied cell_a.Entity if we hadn't overwritten it —
+		// wait: in map.cpp *c = *cptr copies from the raw buffer where cptr->Entity was nulled!
+		// Reproduce map.cpp's exact raw-buffer copy sequence:
+		EC::Destroy_Entity(cell_a.Entity);
+		new (&cell_a) CellClass(101);
+
+		Check(Count_Root_Entities() == 3, "zero leaked entities after Set_Map_Dimensions shift");
+
+		TestRegistry::AI_All(EC::World());
+		Check(cell_b.Tiberium == 14, "OwnerLink<CellClass> rebound to shifted cell_b address");
+		Check(cell_a.Tiberium == 10, "rebuilt cell_a untouched after shift");
+
+		// Simulate Scenario_Clear_All: StaticBlubCellSentinel.Entity must remain alive!
+		TestRegistry::Scenario_Clear_All();
+		Check(StaticBlubCellSentinel.Entity.is_alive(),
+			"Scenario_Clear_All preserves live 1:1 entities such as BlubCell");
+	}
+	Check(Count_Root_Entities() == 1, "all local CellClass entities destroyed 1:1 at scope exit");
 }
 
 void Test_All_39_Global_And_Entity_Hooks_And_Disabled_State(void)
 {
-	EC::World_Reset();
-	TestRegistry::Register_All(EC::World());
 	GOrderLog.clear();
 	GScenarioClears = 0;
 
-	FootClass foot(50);
-	ObjectClass peer(51);
+	FootClass foot(50, /*start_in_limbo=*/false);
+	ObjectClass peer(51, /*start_in_limbo=*/false);
 	CellClass cell(7);
 	LocomotionClass active_loco(&foot);
 	LocomotionClass piggy_loco(&foot);
 	ILocomotion * loco_iface = &active_loco;
 
-	// Add component through ILocomotion interface without dynamic_cast.
-	loco_iface->Components().Emplace<LocoOverdriveComp>(LocoOverdriveComp{3, 0});
+	// Add component directly through ILocomotion::Get_Entity() in native flecs paradigm!
+	loco_iface->Get_Entity().set<LocoOverdriveComp>({3, 0});
 
-	// Piggybacked locomotor receives component while suspended: must NOT tick in AI_All!
-	piggy_loco.Components().Set_Disabled(true);
-	piggy_loco.Components().Emplace<LocoOverdriveComp>(LocoOverdriveComp{100, 0});
-	Check(piggy_loco.Components().Is_Disabled(), "pending disabled state applied upon materialization");
+	// Piggybacked locomotor receives flecs::Disabled + component: must NOT tick in AI_All!
+	piggy_loco.Entity.add(flecs::Disabled);
+	piggy_loco.Entity.set<LocoOverdriveComp>({100, 0});
+	Check(piggy_loco.Entity.has(flecs::Disabled), "piggybacked locomotor carries flecs::Disabled");
 
-	foot.Components.Emplace<GenericPulseComp>();
-	{
-		auto & sh = foot.Components.Emplace<ObjectShieldComp>();
-		sh.LinkedPeer = &peer;
-	}
-	cell.Components.Emplace<CellHazardComp>(CellHazardComp{5, 0});
+	foot.Entity.add<GenericPulseComp>();
+	foot.Entity.set<ObjectShieldComp>({20, &peer, 0, false});
+	cell.Entity.set<CellHazardComp>({5, 0});
+
+	// Downstream ad-hoc native flecs query works directly over EC::World()!
+	int custom_query_hits = 0;
+	EC::World().each([&](ObjectShieldComp const & sh, EC::OwnerLink<ObjectClass> const & link) {
+		if (link.ptr == &foot && sh.LinkedPeer == &peer) {
+			++custom_query_hits;
+		}
+	});
+	Check(custom_query_hits == 1, "downstream native flecs::world::each query inspects components directly");
 
 	// Global hooks G01..G09
 	TestRegistry::Frame_Begin_All(EC::World());
@@ -646,7 +738,7 @@ void Test_All_39_Global_And_Entity_Hooks_And_Disabled_State(void)
 	TestRegistry::Scenario_Clear_All();
 
 	{
-		auto const & pulse = foot.Components.Get<GenericPulseComp>();
+		auto const & pulse = foot.Entity.get<GenericPulseComp>();
 		Check(pulse.Ticks == 1 && pulse.PostTicks == 1 && pulse.EnvTicks == 1, "AI/PostAI/Environment_AI ran");
 		Check(pulse.FrameBegins == 1 && pulse.FrameEnds == 1, "Frame_Begin/Frame_End ran");
 		Check(pulse.PreRenders == 1 && pulse.PostRenders == 1, "Pre_Render/Post_Render ran");
@@ -662,16 +754,16 @@ void Test_All_39_Global_And_Entity_Hooks_And_Disabled_State(void)
 
 	// Limbo suspension via flecs::Disabled (moves entity between enabled and Disabled tables)
 	TestRegistry::Dispatch_Limbo(foot);
-	foot.Components.Set_Disabled(true);
+	foot.Entity.add(flecs::Disabled);
 	TestRegistry::AI_All(EC::World());
-	Check(foot.Components.Get<GenericPulseComp>().Ticks == 1, "Limbo entity skipped by AI_All");
-	foot.Components.Set_Disabled(false);
+	Check(foot.Entity.get<GenericPulseComp>().Ticks == 1, "Limbo entity skipped by cached AI_All query");
+	foot.Entity.remove(flecs::Disabled);
 	TestRegistry::Dispatch_Unlimbo(foot, Coord{}, 0);
 	TestRegistry::AI_All(EC::World());
-	Check(foot.Components.Get<GenericPulseComp>().Ticks == 2, "Unlimbo re-enables entity for AI_All");
+	Check(foot.Entity.get<GenericPulseComp>().Ticks == 2, "Unlimbo re-enables entity for cached AI_All query");
 
 	// Remaining Object / Techno / Foot entity hooks (E02..E16)
-	auto & shield = foot.Components.Get<ObjectShieldComp>();
+	auto & shield = foot.Entity.get_mut<ObjectShieldComp>();
 	int dmg = 25;
 	WarheadTypeClass wh;
 	TestRegistry::Dispatch_Take_Damage(foot, dmg, 0, &wh, &foot, false);
@@ -725,7 +817,7 @@ void Test_All_39_Global_And_Entity_Hooks_And_Disabled_State(void)
 	TestRegistry::Dispatch_Goodie_Check(cell, &foot);
 	TestRegistry::Dispatch_Cell_Draw_It(cell, Point2D{}, Rect{});
 	TestRegistry::Dispatch_Draw_Overlay(cell, Point2D{}, Rect{});
-	Check(cell.Components.Get<CellHazardComp>().CellEvents == ((1 << 10) - 1), "all 10 CellClass event hooks fired");
+	Check(cell.Entity.get<CellHazardComp>().CellEvents == ((1 << 10) - 1), "all 10 CellClass event hooks fired");
 
 	// Locomotor entity hooks (E22..E26)
 	Matrix3D mat{1};
@@ -737,18 +829,16 @@ void Test_All_39_Global_And_Entity_Hooks_And_Disabled_State(void)
 	TestRegistry::Dispatch_Power_Off(active_loco);
 	TestRegistry::Dispatch_Power_On(active_loco);
 	TestRegistry::Dispatch_Begin_Piggyback(active_loco, &piggy_loco);
-	Check(piggy_loco.Components().Is_Disabled(), "Begin_Piggyback sets Disabled on carried locomotor");
+	Check(piggy_loco.Entity.has(flecs::Disabled), "Begin_Piggyback sets Disabled on carried locomotor");
 	TestRegistry::Dispatch_End_Piggyback(active_loco, &piggy_loco);
-	Check(!piggy_loco.Components().Is_Disabled(), "End_Piggyback clears Disabled on carried locomotor");
+	Check(!piggy_loco.Entity.has(flecs::Disabled), "End_Piggyback syncs Disabled from active carrier locomotor");
 	TestRegistry::Dispatch_Draw_Matrix(active_loco, mat, nullptr);
 	Check(mat.Scale == 4, "Draw_Matrix adjusted voxel Matrix3D");
-	Check(active_loco.Components().Get<LocoOverdriveComp>().LocoEvents == ((1 << 10) - 1), "all 10 LocomotionClass event hooks fired");
+	Check(active_loco.Entity.get<LocoOverdriveComp>().LocoEvents == ((1 << 10) - 1), "all 10 LocomotionClass event hooks fired");
 }
 
 void Test_Two_Pass_Save_Trailer_And_Swizzle_Stability(void)
 {
-	EC::World_Reset();
-	TestRegistry::Register_All(EC::World());
 	GSwizzler.Reset();
 
 	// 1. Legacy .SAV without EC01 trailer (Offset == Size) loads cleanly as no-op.
@@ -760,44 +850,47 @@ void Test_Two_Pass_Save_Trailer_And_Swizzle_Stability(void)
 		bool const ok = TestRegistry::Load_Trailer(
 			EC::World(),
 			legacy_load,
-			[](EC::RootKind, SwizzleIDType) -> void * { return nullptr; });
+			[](EC::RootKind, SwizzleIDType) -> flecs::entity { return flecs::entity::null(); });
 		Check(ok && !legacy_load.Was_Error(), "legacy .SAV with no EC01 trailer succeeds cleanly");
 	}
 
 	// 2. Stress test >128 entities with multiple components + SwizzleTarget pointers
-	// to prove Subpass 1 freezes flecs tables before Subpass 2 registers Swizzle slots!
+	// (plus thousands of plain componentless cells!) to prove:
+	// - Save_Trailer iterates only serializable component archetypes (ignoring plain cells),
+	// - Load_Trailer Subpass 1 freezes flecs tables before Subpass 2 registers Swizzle slots!
 	constexpr int N = 140;
+	std::vector<CellClass *> plain_cells;
+	plain_cells.reserve(500);
+	for (int i = 0; i < 500; ++i) {
+		plain_cells.push_back(new CellClass(5000 + i));
+	}
+
 	std::vector<FootClass *> saved_units;
 	saved_units.reserve(N);
 	for (int i = 0; i < N; ++i) {
-		saved_units.push_back(new FootClass(1000 + i));
+		saved_units.push_back(new FootClass(1000 + i, /*start_in_limbo=*/(i % 3) == 0));
 	}
-	CellClass saved_cell(77);
-	LocomotionClass saved_loco(saved_units[0]);
-
-	for (int i = 0; i < N; ++i) {
-		auto & sh = saved_units[i]->Components.Emplace<ObjectShieldComp>();
-		sh.Shield = 10 + i;
-		sh.LinkedPeer = saved_units[(i + 1) % N];
-		auto & gp = saved_units[i]->Components.Emplace<GenericPulseComp>();
-		gp.Ticks = 500 + i;
-		gp.PostTicks = 600 + i;
-		if ((i % 3) == 0) {
-			saved_units[i]->Components.Set_Disabled(true);
-		}
-	}
-	saved_cell.Components.Emplace<CellHazardComp>(CellHazardComp{9, 0});
-	saved_loco.Components().Emplace<LocoOverdriveComp>(LocoOverdriveComp{7, 0});
-
-	// Assign swizzle IDs to all base owners (just as Put_All does before the trailer).
-	for (FootClass * u : saved_units) {
-		(void)GSwizzler.ID_Of(static_cast<ObjectClass *>(u));
-	}
-	(void)GSwizzler.ID_Of(&saved_cell);
-	(void)GSwizzler.ID_Of(&saved_loco);
 
 	std::vector<unsigned char> archive;
 	{
+		CellClass saved_cell(77);
+		LocomotionClass saved_loco(saved_units[0]);
+
+		for (int i = 0; i < N; ++i) {
+			saved_units[i]->Entity.set<ObjectShieldComp>({10 + i, saved_units[(i + 1) % N], 0, false});
+			auto & gp = saved_units[i]->Entity.ensure<GenericPulseComp>();
+			gp.Ticks = 500 + i;
+			gp.PostTicks = 600 + i;
+		}
+		saved_cell.Entity.set<CellHazardComp>({9, 0});
+		saved_loco.Entity.set<LocoOverdriveComp>({7, 0});
+
+		for (FootClass * u : saved_units) {
+			(void)GSwizzler.ID_Of(static_cast<ObjectClass *>(u));
+		}
+		(void)GSwizzler.ID_Of(&saved_cell);
+		(void)GSwizzler.ID_Of(&saved_loco);
+
 		SaveStreamClass save_stream(archive, SaveStreamClass::MODE_SAVE);
 		int base_sentinel = 0x12345678;
 		save_stream.Serialize(base_sentinel);
@@ -808,20 +901,22 @@ void Test_Two_Pass_Save_Trailer_And_Swizzle_Stability(void)
 				return GSwizzler.ID_Of(ptr);
 			});
 		Check(saved_ok && !save_stream.Was_Error(), "EC01 trailer saved cleanly");
+
+		// Destroy saved scenario objects 1:1 (just as Clear_Scenario does before Load_Game!).
+		for (FootClass * u : saved_units) delete u;
+		saved_units.clear();
+		for (CellClass * c : plain_cells) delete c;
+		plain_cells.clear();
 	}
+	Check(Count_Root_Entities() == 1, "1:1 scenario teardown left only StaticBlubCellSentinel alive");
 
-	// Tear down world and recreate fresh target objects at DIFFERENT memory addresses.
-	for (FootClass * u : saved_units) delete u;
-	saved_units.clear();
-	EC::World_Reset();
-	TestRegistry::Register_All(EC::World());
-
+	// Reconstruct fresh target objects at DIFFERENT memory addresses (with their own 1:1 entities!).
 	std::vector<FootClass *> loaded_units;
 	loaded_units.reserve(N);
 	GSwizzler.ToPtr.clear();
 	GSwizzler.Patches.clear();
 	for (int i = 0; i < N; ++i) {
-		FootClass * u = new FootClass(1000 + i);
+		FootClass * u = new FootClass(1000 + i, /*start_in_limbo=*/(i % 3) == 0);
 		loaded_units.push_back(u);
 		GSwizzler.Here_I_Am(static_cast<SwizzleIDType>(i + 1), static_cast<ObjectClass *>(u));
 	}
@@ -839,10 +934,14 @@ void Test_Two_Pass_Save_Trailer_And_Swizzle_Stability(void)
 		bool const loaded_ok = TestRegistry::Load_Trailer(
 			EC::World(),
 			load_stream,
-			[](EC::RootKind, SwizzleIDType id) -> void * {
-				return GSwizzler.Address_Of(id);
+			[](EC::RootKind kind, SwizzleIDType id) -> flecs::entity {
+				void * raw = GSwizzler.Address_Of(id);
+				if (raw == nullptr) return flecs::entity::null();
+				if (kind == EC::RootKind::Object) return static_cast<ObjectClass *>(raw)->Entity;
+				if (kind == EC::RootKind::Cell) return static_cast<CellClass *>(raw)->Entity;
+				return static_cast<LocomotionClass *>(raw)->Entity;
 			});
-		Check(loaded_ok && !load_stream.Was_Error(), "EC01 trailer loaded cleanly");
+		Check(loaded_ok && !load_stream.Was_Error(), "EC01 trailer loaded onto existing 1:1 entities cleanly");
 		Check(load_stream.Offset() == load_stream.Size(), "EC01 trailer consumed exact archive length");
 
 		// Resolve all delayed swizzle pointers AFTER Load_Trailer (matching Load_Game).
@@ -852,8 +951,8 @@ void Test_Two_Pass_Save_Trailer_And_Swizzle_Stability(void)
 
 	bool all_restored = true;
 	for (int i = 0; i < N; ++i) {
-		auto const * sh = loaded_units[i]->Components.Try_Get<ObjectShieldComp>();
-		auto const * gp = loaded_units[i]->Components.Try_Get<GenericPulseComp>();
+		auto const * sh = loaded_units[i]->Entity.try_get<ObjectShieldComp>();
+		auto const * gp = loaded_units[i]->Entity.try_get<GenericPulseComp>();
 		if (sh == nullptr || gp == nullptr) {
 			all_restored = false;
 			break;
@@ -864,40 +963,36 @@ void Test_Two_Pass_Save_Trailer_And_Swizzle_Stability(void)
 			|| gp->Ticks != 500 + i
 			|| gp->PostTicks != 600 + i
 			|| gp->PostLoads != 1
-			|| loaded_units[i]->Components.Is_Disabled() != ((i % 3) == 0)) {
+			|| loaded_units[i]->Entity.has(flecs::Disabled) != ((i % 3) == 0)) {
 			all_restored = false;
 			break;
 		}
 	}
 	Check(all_restored, "all 140 entities restored exact fields, Disabled flags, Post_Load, and swizzled pointers");
-	Check(loaded_cell.Components.Get<CellHazardComp>().Level == 9, "CellHazardComp restored from EC01 trailer");
-	Check(loaded_loco.Components().Get<LocoOverdriveComp>().Boost == 7, "LocoOverdriveComp restored from EC01 trailer");
+	Check(loaded_cell.Entity.get<CellHazardComp>().Level == 9, "CellHazardComp restored from EC01 trailer");
+	Check(loaded_loco.Entity.get<LocoOverdriveComp>().Boost == 7, "LocoOverdriveComp restored from EC01 trailer");
 
 	for (FootClass * u : loaded_units) delete u;
 }
 
 void Test_Four_Level_Per_Component_CRC(void)
 {
-	EC::World_Reset();
-	TestRegistry::Register_All(EC::World());
-
 	FootClass u1(10);
 	FootClass u2(20);
 	CellClass c1(300);
 	LocomotionClass l1(&u1);
 
-	auto & s1 = u1.Components.Emplace<ObjectShieldComp>();
-	s1.Shield = 50;
-	s1.LinkedPeer = &u2;
-	auto & p1 = u1.Components.Emplace<GenericPulseComp>();
+	u1.Entity.set<ObjectShieldComp>({50, &u2, 0, false});
+	auto & p1 = u1.Entity.ensure<GenericPulseComp>();
 	p1.Ticks = 9;
 
-	auto & s2 = u2.Components.Emplace<ObjectShieldComp>();
-	s2.Shield = 50;
-	s2.LinkedPeer = &u2;
+	u2.Entity.set<ObjectShieldComp>({50, &u2, 0, false});
 
-	c1.Components.Emplace<CellHazardComp>(CellHazardComp{11, 0});
-	l1.Components().Emplace<LocoOverdriveComp>(LocoOverdriveComp{4, 0});
+	c1.Entity.set<CellHazardComp>({11, 0});
+	l1.Entity.set<LocoOverdriveComp>({4, 0});
+
+	auto const & s1 = u1.Entity.get<ObjectShieldComp>();
+	auto & s2 = u2.Entity.get_mut<ObjectShieldComp>();
 
 	// Level 1 (E27a): Single component CRC in isolation
 	int const single_s1 = EC::Single_Component_CRC(s1);
@@ -905,20 +1000,19 @@ void Test_Four_Level_Per_Component_CRC(void)
 	Check(single_s1 == single_s2 && single_s1 != 0, "identical component instances produce identical individual CRC");
 
 	CRCEngine crc_only_shield_u1;
-	bool const has_s1 = TestRegistry::Compute_Entity_Component_CRC<ObjectShieldComp>(u1.Components, crc_only_shield_u1);
+	bool const has_s1 = TestRegistry::Compute_Entity_Component_CRC<ObjectShieldComp>(u1.Entity, crc_only_shield_u1);
 	CRCEngine crc_only_shield_u2;
-	bool const has_s2 = TestRegistry::Compute_Entity_Component_CRC<ObjectShieldComp>(u2.Components, crc_only_shield_u2);
+	bool const has_s2 = TestRegistry::Compute_Entity_Component_CRC<ObjectShieldComp>(u2.Entity, crc_only_shield_u2);
 	Check(has_s1 && has_s2 && crc_only_shield_u1() == crc_only_shield_u2(),
 		"Compute_Entity_Component_CRC<C> isolates single component from sibling GenericPulseComp");
 
 	// Level 2 (E27b): Per-entity CRC across all attached components
 	CRCEngine entity_u1_crc;
-	TestRegistry::Compute_Entity_CRC(u1.Components, entity_u1_crc);
+	TestRegistry::Compute_Entity_CRC(u1.Entity, entity_u1_crc);
 	CRCEngine entity_u2_crc;
-	TestRegistry::Compute_Entity_CRC(u2.Components, entity_u2_crc);
+	TestRegistry::Compute_Entity_CRC(u2.Entity, entity_u2_crc);
 	Check(entity_u1_crc() != entity_u2_crc(), "per-entity CRC differs when u1 carries extra GenericPulseComp");
 
-	// Mutating one component changes single, entity, per-type table, and global CRCs!
 	auto owner_key_fn = [](EC::RootKind kind, void const * ptr) -> EC::StableOwnerKey {
 		if (kind == EC::RootKind::Object) {
 			return EC::StableOwnerKey{0, static_cast<ObjectClass const *>(ptr)->Fetch_ID(), 0};
@@ -967,7 +1061,9 @@ void Test_Four_Level_Per_Component_CRC(void)
 
 int main(void)
 {
-	Test_Lazy_Lifecycle_And_Cell_Anomalies();
+	EC::Set_World_Init_Hook(&Register_Test_Components);
+
+	Test_Eager_1To1_Lifecycle_And_Cell_Operations();
 	Test_All_39_Global_And_Entity_Hooks_And_Disabled_State();
 	Test_Two_Pass_Save_Trailer_And_Swizzle_Stability();
 	Test_Four_Level_Per_Component_CRC();

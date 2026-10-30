@@ -87,9 +87,14 @@ class LocomotionClass : public IPersistent, public ILocomotion
 		virtual int Get_Track_Index(void) override {return(-1);}
 		virtual int Get_Speed_Accum(void) override {return(-1);}
 
-		virtual EC::TypedEntity<LocomotionClass> & Components(void) noexcept override {return(CompHolder);}
-		virtual EC::TypedEntity<LocomotionClass> const & Components(void) const noexcept override {return(CompHolder);}
+		virtual flecs::entity Get_Entity(void) const noexcept override {return(Entity);}
 		FootClass * Linked_Object(void) const noexcept {return(LinkedTo);}
+
+		/*
+		 * Underlying flecs entity owned 1:1 by this locomotor (created in constructor,
+		 * destroyed in destructor).
+		 */
+		flecs::entity Entity;
 
 
 		/*
@@ -136,9 +141,4 @@ class LocomotionClass : public IPersistent, public ILocomotion
 		 * persistence machinery never assumes a locomotor is already safely on disk.
 		 */
 		bool Dirty;
-
-		/*
-		 * Lazily materialized component-holder bound to this locomotor.
-		 */
-		EC::TypedEntity<LocomotionClass> CompHolder;
 };

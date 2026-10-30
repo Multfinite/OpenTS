@@ -526,9 +526,10 @@ class CellClass : public AbstractClass
 		virtual void Compute_CRC(CRCEngine & crc) const override;
 
 		/*
-		 * Lazily materialized component-holder bound to this cell.
+		 * Underlying flecs entity owned 1:1 by this cell (created in constructor,
+		 * destroyed in destructor).
 		 */
-		EC::TypedEntity<CellClass> Components;
+		flecs::entity Entity;
 
 		virtual int What_Am_I(void) const override;
 

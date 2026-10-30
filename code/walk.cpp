@@ -641,7 +641,7 @@ void WalkLocomotionClass::Serialize(SaveStreamClass & stream)
 		} else {
 			Piggybacker = Load_Locomotor(stream);
 			if (Piggybacker != nullptr) {
-				Piggybacker->Components().Set_Disabled(true);
+				Piggybacker->Get_Entity().add(flecs::Disabled);
 			}
 		}
 	}

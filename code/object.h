@@ -202,9 +202,10 @@ class ObjectClass : public AbstractClass
 		Coord Position;
 
 		/*
-		 * Lazily materialized component-holder bound to this object.
+		 * Underlying flecs entity owned 1:1 by this object (created in constructor,
+		 * destroyed in destructor).
 		 */
-		EC::TypedEntity<ObjectClass> Components;
+		flecs::entity Entity;
 
 		/*-----------------------------------------------------------------------------------
 		**	Constructor & destructors.

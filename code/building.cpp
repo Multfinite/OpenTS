@@ -131,6 +131,7 @@
 #include "draw.h"
 #include "drive.h"
 #include "dsurface.h"
+#include "ec/components/produce_cash.h"
 #include "ec/engine_hooks.h"
 #include "event.h"
 #include "factory.h"
@@ -296,7 +297,7 @@ BuildingClass::BuildingClass(BuildingTypeClass const * type, HouseClass * house)
 		}
 		IsCloakable = Class->IsCloakable;
 		if (!Class->IsWall && Class->PowersUpBuilding.empty() && Class->Has_Produce_Cash()) {
-			EC::Hooks::Ensure_Produce_Cash(*this);
+			Entity.add<EC::ProduceCashComponent>();
 		}
 	}
 }
@@ -3748,7 +3749,7 @@ void BuildingClass::Grand_Opening(bool captured)
 		// Grand_Opening hooks run before HasOpened is set so components can distinguish
 		// first opening from subsequent openings on capture.
 		if (Class != NULL && Class->Has_Produce_Cash()) {
-			EC::Hooks::Ensure_Produce_Cash(*this);
+			Entity.add<EC::ProduceCashComponent>();
 		}
 		EC::Hooks::On_Grand_Opening(*this, captured);
 

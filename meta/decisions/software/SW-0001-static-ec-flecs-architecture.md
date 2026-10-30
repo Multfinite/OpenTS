@@ -2,7 +2,8 @@
 id: decision.software.SW-0001
 title: "Статически типизированная EC-система на базе flecs (без ECS-систем)"
 type: decision
-status: approved
+status: superseded
+superseded_by: "SW-0002"
 authority: contract
 visibility: internal
 scope: software
@@ -17,7 +18,6 @@ affects:
   - "code/ec/world.cpp"
   - "code/ec/concepts.h"
   - "code/ec/game_components.h"
-  - "code/ec/entity_inl.h"
   - "code/ec/registry.h"
   - "code/ec/engine_hooks.h"
   - "code/ec/engine_hooks.cpp"

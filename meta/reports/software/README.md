@@ -19,3 +19,4 @@ updated: "2026-10-30"
 | [`2026-10-30-analysis-ec-flecs.md`](2026-10-30-analysis-ec-flecs.md) | `software/analysis` | `analysis` |
 | [`2026-10-30-static-ec-flecs-implementation.md`](2026-10-30-static-ec-flecs-implementation.md) | `software/code` | `task` |
 | [`2026-10-30-demo-produce-cash-component.md`](2026-10-30-demo-produce-cash-component.md) | `software/code` | `task` |
+| [`2026-10-30-eager-flecs-entity-root-lifetime.md`](2026-10-30-eager-flecs-entity-root-lifetime.md) | `software/code` | `task` |

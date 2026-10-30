@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Host-side compile, execution, and header-isolation tests for OpenTS's static C++20 EC layer."""
+"""Host-side compile, execution, and architectural invariant tests for OpenTS's static C++20 EC layer."""
 from __future__ import annotations
 
 import pathlib
@@ -13,17 +13,11 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 
 class StaticEcFlecsTests(unittest.TestCase):
-    def test_compile_and_run_ec_cpp20_suite_over_flecs(self) -> None:
+    def _compile_common_objects(self, tmp_dir: pathlib.Path) -> tuple[pathlib.Path, pathlib.Path, list[str]]:
         flecs_c = REPO_ROOT / "thirdparty" / "flecs" / "distr" / "flecs.c"
         flecs_inc = REPO_ROOT / "thirdparty" / "flecs" / "include"
         code_dir = REPO_ROOT / "code"
-        ectest_cpp = REPO_ROOT / "tests" / "ec" / "ectest.cpp"
-        world_cpp = code_dir / "ec" / "world.cpp"
         crc_cpp = code_dir / "crc.cpp"
-
-        self.assertTrue(flecs_c.is_file(), f"Missing flecs source: {flecs_c}")
-        self.assertTrue(ectest_cpp.is_file(), f"Missing EC test source: {ectest_cpp}")
-        self.assertTrue(world_cpp.is_file(), f"Missing EC world source: {world_cpp}")
 
         common_defs = [
             "-DFLECS_CUSTOM_BUILD",
@@ -31,47 +25,58 @@ class StaticEcFlecsTests(unittest.TestCase):
             "-DFLECS_OS_API_IMPL",
         ]
 
+        flecs_o = tmp_dir / "flecs.o"
+        crc_o = tmp_dir / "crc.o"
+
+        subprocess.run(
+            [
+                "gcc",
+                "-O1",
+                "-c",
+                str(flecs_c),
+                f"-I{flecs_inc}",
+                *common_defs,
+                "-o",
+                str(flecs_o),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+        # Compile legacy Westwood crc.cpp without strict modern warning flags.
+        crc_comp = subprocess.run(
+            [
+                "g++",
+                "-std=c++20",
+                "-O2",
+                "-c",
+                str(crc_cpp),
+                f"-I{code_dir}",
+                "-o",
+                str(crc_o),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(crc_comp.returncode, 0, msg=f"crc.cpp compile failed:\n{crc_comp.stderr}")
+        return flecs_o, crc_o, common_defs
+
+    def test_compile_and_run_ec_cpp20_suite_over_flecs(self) -> None:
+        flecs_inc = REPO_ROOT / "thirdparty" / "flecs" / "include"
+        code_dir = REPO_ROOT / "code"
+        ectest_cpp = REPO_ROOT / "tests" / "ec" / "ectest.cpp"
+        world_cpp = code_dir / "ec" / "world.cpp"
+
+        self.assertTrue(ectest_cpp.is_file(), f"Missing EC test source: {ectest_cpp}")
+        self.assertTrue(world_cpp.is_file(), f"Missing EC world source: {world_cpp}")
+
         with tempfile.TemporaryDirectory(prefix="opents_ectest_") as tmp:
             tmp_dir = pathlib.Path(tmp)
-            flecs_o = tmp_dir / "flecs.o"
-            crc_o = tmp_dir / "crc.o"
+            flecs_o, crc_o, common_defs = self._compile_common_objects(tmp_dir)
             exe = tmp_dir / "ectest"
 
-            subprocess.run(
-                [
-                    "gcc",
-                    "-O1",
-                    "-c",
-                    str(flecs_c),
-                    f"-I{flecs_inc}",
-                    *common_defs,
-                    "-o",
-                    str(flecs_o),
-                ],
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-
-            # Compile legacy Westwood crc.cpp without strict modern warning flags.
-            crc_comp = subprocess.run(
-                [
-                    "g++",
-                    "-std=c++20",
-                    "-O2",
-                    "-c",
-                    str(crc_cpp),
-                    f"-I{code_dir}",
-                    "-o",
-                    str(crc_o),
-                ],
-                check=False,
-                capture_output=True,
-                text=True,
-            )
-            self.assertEqual(crc_comp.returncode, 0, msg=f"crc.cpp compile failed:\n{crc_comp.stderr}")
-
-            # Compile all EC headers, world.cpp, and ectest.cpp with strict -Wall -Wextra -Werror.
             comp = subprocess.run(
                 [
                     "g++",
@@ -103,59 +108,17 @@ class StaticEcFlecsTests(unittest.TestCase):
             self.assertIn("0 failed", res.stdout)
 
     def test_compile_and_run_produce_cash_component_suite(self) -> None:
-        flecs_c = REPO_ROOT / "thirdparty" / "flecs" / "distr" / "flecs.c"
         flecs_inc = REPO_ROOT / "thirdparty" / "flecs" / "include"
         code_dir = REPO_ROOT / "code"
         producecash_cpp = REPO_ROOT / "tests" / "producecash" / "producecashtest.cpp"
         world_cpp = code_dir / "ec" / "world.cpp"
-        crc_cpp = code_dir / "crc.cpp"
 
         self.assertTrue(producecash_cpp.is_file(), f"Missing ProduceCash test source: {producecash_cpp}")
 
-        common_defs = [
-            "-DFLECS_CUSTOM_BUILD",
-            "-DFLECS_CPP",
-            "-DFLECS_OS_API_IMPL",
-        ]
-
         with tempfile.TemporaryDirectory(prefix="opents_producecash_") as tmp:
             tmp_dir = pathlib.Path(tmp)
-            flecs_o = tmp_dir / "flecs.o"
-            crc_o = tmp_dir / "crc.o"
+            flecs_o, crc_o, common_defs = self._compile_common_objects(tmp_dir)
             exe = tmp_dir / "producecashtest"
-
-            subprocess.run(
-                [
-                    "gcc",
-                    "-O1",
-                    "-c",
-                    str(flecs_c),
-                    f"-I{flecs_inc}",
-                    *common_defs,
-                    "-o",
-                    str(flecs_o),
-                ],
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-
-            crc_comp = subprocess.run(
-                [
-                    "g++",
-                    "-std=c++20",
-                    "-O2",
-                    "-c",
-                    str(crc_cpp),
-                    f"-I{code_dir}",
-                    "-o",
-                    str(crc_o),
-                ],
-                check=False,
-                capture_output=True,
-                text=True,
-            )
-            self.assertEqual(crc_comp.returncode, 0, msg=f"crc.cpp compile failed:\n{crc_comp.stderr}")
 
             comp = subprocess.run(
                 [
@@ -187,86 +150,35 @@ class StaticEcFlecsTests(unittest.TestCase):
             self.assertEqual(res.returncode, 0, msg=f"producecashtest failed:\n{res.stdout}\n{res.stderr}")
             self.assertIn("0 failed", res.stdout)
 
-    def test_public_ec_headers_compile_without_flecs_include_path(self) -> None:
-        code_dir = REPO_ROOT / "code"
-        probe_src = """
-#include "ec/fnv1a.h"
-#include "ec/entity.h"
-#include "ec/engine_hooks.h"
-
-struct DummyOwner {
-    EC::TypedEntity<ObjectClass> Components;
-    DummyOwner() : Components(nullptr) {}
-};
-
-int VerifyFastPath() {
-    DummyOwner d;
-    if (d.Components.Is_Materialized()) {
-        return 1;
-    }
-    return static_cast<int>(EC::Fnv1a_64("ObjectClass") & 0x7FFFFFFF);
-}
-"""
-        with tempfile.TemporaryDirectory(prefix="opents_ec_hdr_") as tmp:
-            tmp_dir = pathlib.Path(tmp)
-            src_path = tmp_dir / "probe.cpp"
-            obj_path = tmp_dir / "probe.o"
-            src_path.write_text(probe_src, encoding="utf-8")
-
-            # Deliberately omit -Ithirdparty/flecs/include to prove <flecs.h> never leaks.
-            comp = subprocess.run(
-                [
-                    "g++",
-                    "-std=c++20",
-                    "-O2",
-                    "-Wall",
-                    "-Wextra",
-                    "-Werror",
-                    "-c",
-                    str(src_path),
-                    f"-I{code_dir}",
-                    "-o",
-                    str(obj_path),
-                ],
-                check=False,
-                capture_output=True,
-                text=True,
-            )
-            self.assertEqual(
-                comp.returncode,
-                0,
-                msg=f"Public EC headers leaked <flecs.h> or failed without flecs include path:\n{comp.stderr}",
-            )
-
-    def test_empty_default_game_components_registry_compiles_and_runs(self) -> None:
-        flecs_c = REPO_ROOT / "thirdparty" / "flecs" / "distr" / "flecs.c"
+    def test_engine_hooks_and_empty_registry_compile_and_run_with_1to1_entities(self) -> None:
         flecs_inc = REPO_ROOT / "thirdparty" / "flecs" / "include"
         code_dir = REPO_ROOT / "code"
         world_cpp = code_dir / "ec" / "world.cpp"
-        crc_cpp = code_dir / "crc.cpp"
 
-        empty_probe_src = """
+        probe_src = """
 #define EC_CUSTOM_REGISTRY_COMPONENTS
+#include "ec/engine_hooks.h"
 #include "ec/registry.h"
 
 class ObjectClass {
 public:
-    EC::TypedEntity<ObjectClass> Components{this};
+    flecs::entity Entity{EC::Create_Entity(this)};
+    ~ObjectClass() { EC::Destroy_Entity(Entity); }
 };
 class CellClass {
 public:
-    EC::TypedEntity<CellClass> Components{this};
+    flecs::entity Entity{EC::Create_Entity(this)};
+    ~CellClass() { EC::Destroy_Entity(Entity); }
 };
 struct ILocomotion {
     virtual ~ILocomotion() = default;
-    virtual EC::TypedEntity<LocomotionClass> & Components() noexcept = 0;
-    virtual EC::TypedEntity<LocomotionClass> const & Components() const noexcept = 0;
+    virtual flecs::entity Get_Entity() const noexcept = 0;
 };
 class LocomotionClass : public ILocomotion {
 public:
-    EC::TypedEntity<LocomotionClass> Holder{this};
-    EC::TypedEntity<LocomotionClass> & Components() noexcept override { return Holder; }
-    EC::TypedEntity<LocomotionClass> const & Components() const noexcept override { return Holder; }
+    flecs::entity Entity{EC::Create_Entity(this)};
+    ~LocomotionClass() { EC::Destroy_Entity(Entity); }
+    flecs::entity Get_Entity() const noexcept override { return Entity; }
 };
 
 int main() {
@@ -274,48 +186,36 @@ int main() {
     EC::GameComponents::Register_All(EC::World());
     EC::GameComponents::AI_All(EC::World());
     EC::GameComponents::PostAI_All(EC::World());
-    ObjectClass obj;
-    LocomotionClass carrier;
-    LocomotionClass carried;
-    carrier.Components().Set_Disabled(true);
-    EC::GameComponents::Dispatch_Begin_Piggyback(carrier, &carried);
-    if (!carried.Components().Is_Disabled()) return 1;
-    EC::GameComponents::Dispatch_End_Piggyback(carrier, &carried);
-    if (!carried.Components().Is_Disabled()) return 2;
-    carrier.Components().Set_Disabled(false);
-    EC::GameComponents::Dispatch_End_Piggyback(carrier, &carried);
-    if (carried.Components().Is_Disabled()) return 3;
-    CRCEngine crc;
-    obj.Components.Compute_CRC(crc);
+    {
+        ObjectClass obj;
+        CellClass cell;
+        LocomotionClass carrier;
+        LocomotionClass carried;
+        if (!obj.Entity.is_alive() || !cell.Entity.is_alive()) return 1;
+        if (EC::Has_User_Components(obj.Entity)) return 2;
+        carrier.Entity.add(flecs::Disabled);
+        if (EC::Has_User_Components(carrier.Entity)) return 3;
+        EC::GameComponents::Dispatch_Begin_Piggyback(carrier, &carried);
+        if (!carried.Entity.has(flecs::Disabled)) return 4;
+        EC::GameComponents::Dispatch_End_Piggyback(carrier, &carried);
+        if (!carried.Entity.has(flecs::Disabled)) return 5;
+        carrier.Entity.remove(flecs::Disabled);
+        EC::GameComponents::Dispatch_End_Piggyback(carrier, &carried);
+        if (carried.Entity.has(flecs::Disabled)) return 6;
+        CRCEngine crc;
+        EC::GameComponents::Compute_Entity_CRC(obj.Entity, crc);
+    }
     EC::World_Shutdown();
     return 0;
 }
 """
-        common_defs = [
-            "-DFLECS_CUSTOM_BUILD",
-            "-DFLECS_CPP",
-            "-DFLECS_OS_API_IMPL",
-        ]
         with tempfile.TemporaryDirectory(prefix="opents_ec_empty_") as tmp:
             tmp_dir = pathlib.Path(tmp)
-            flecs_o = tmp_dir / "flecs.o"
-            crc_o = tmp_dir / "crc.o"
+            flecs_o, crc_o, common_defs = self._compile_common_objects(tmp_dir)
             src_path = tmp_dir / "empty_probe.cpp"
             exe = tmp_dir / "empty_probe"
-            src_path.write_text(empty_probe_src, encoding="utf-8")
+            src_path.write_text(probe_src, encoding="utf-8")
 
-            subprocess.run(
-                ["gcc", "-O1", "-c", str(flecs_c), f"-I{flecs_inc}", *common_defs, "-o", str(flecs_o)],
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-            subprocess.run(
-                ["g++", "-std=c++20", "-O2", "-c", str(crc_cpp), f"-I{code_dir}", "-o", str(crc_o)],
-                check=True,
-                capture_output=True,
-                text=True,
-            )
             comp = subprocess.run(
                 [
                     "g++",
@@ -344,35 +244,36 @@ int main() {
             run_res = subprocess.run([str(exe)], check=False, capture_output=True, text=True)
             self.assertEqual(run_res.returncode, 0, msg=f"empty registry run failed: rc={run_res.returncode}")
 
-    def test_toolkit_header_isolation_matches_cmake_policy(self) -> None:
-        code_dir = REPO_ROOT / "code"
-        flecs_re = re.compile(r'^[ \t]*#[ \t]*include[ \t]*[<"](flecs\.h|flecs/)', re.MULTILINE)
-        allowed_private_headers = {
-            "code/ec/world.h",
-            "code/ec/entity_inl.h",
-            "code/ec/registry.h",
-        }
+    def test_pure_flecs_entity_root_handles_and_no_lazy_wrappers(self) -> None:
+        self.assertFalse(
+            (REPO_ROOT / "code" / "ec" / "entity_inl.h").exists(),
+            "Obsolete lazy wrapper header code/ec/entity_inl.h must not exist",
+        )
+
+        forbidden_re = re.compile(
+            r"\b(TypedEntity|EntityView|DetachedEntitySlot|CompHolder|"
+            r"Is_Materialized|Ensure_Materialized|PendingDisabled|"
+            r"Materialize_Loaded_Owner|Ensure_Produce_Cash|World_Reset)\b"
+        )
         violations: list[str] = []
+        for root_dir in (REPO_ROOT / "code", REPO_ROOT / "tests"):
+            for path in sorted(root_dir.rglob("*")):
+                if not path.is_file() or path.suffix not in {".h", ".hh", ".hpp", ".c", ".cpp"}:
+                    continue
+                rel = path.relative_to(REPO_ROOT).as_posix()
+                text = path.read_text(encoding="utf-8", errors="replace")
+                for m in forbidden_re.finditer(text):
+                    violations.append(f"{rel}: {m.group(0)}")
 
-        for path in sorted(code_dir.rglob("*")):
-            if not path.is_file():
-                continue
-            rel = path.relative_to(REPO_ROOT).as_posix()
-            text = path.read_text(encoding="utf-8", errors="replace")
-            matches = [m.group(0).strip() for m in flecs_re.finditer(text)]
-            if not matches:
-                continue
+        self.assertEqual(violations, [], msg="Lazy wrapper remnants found:\n" + "\n".join(violations))
 
-            if path.suffix in {".h", ".hh", ".hpp"}:
-                if rel not in allowed_private_headers:
-                    for hit in matches:
-                        violations.append(f"{rel}: {hit}")
-            elif path.suffix in {".c", ".cpp"}:
-                if not rel.startswith("code/ec/"):
-                    for hit in matches:
-                        violations.append(f"{rel}: {hit}")
-
-        self.assertEqual(violations, [], msg="flecs header isolation violations:\n" + "\n".join(violations))
+        for rel_hdr in ("code/object.h", "code/cell.h", "code/loco.h"):
+            content = (REPO_ROOT / rel_hdr).read_text(encoding="utf-8")
+            self.assertRegex(
+                content,
+                r"\bflecs::entity\s+Entity\s*;",
+                msg=f"{rel_hdr} must store `flecs::entity Entity;` directly",
+            )
 
 
 if __name__ == "__main__":

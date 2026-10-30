@@ -697,7 +697,7 @@ void MapClass::Init_Cells(void)
 		for (int x = 0; x < MAP_CELL_W; x++) {
 			int cellnum = x + y * MAP_CELL_H;
 			if (cellnum < Array.Length() && Array[cellnum] != NULL) {
-				Array[cellnum]->Components.Reset();
+				EC::Destroy_Entity(Array[cellnum]->Entity);
 				new (Array[cellnum]) CellClass;
 			}
 		}
@@ -750,7 +750,7 @@ void MapClass::Set_Map_Dimensions(Rect const & rect, bool reset_cells, int cell_
 	}
 
 	int cellcount = 0;
-	std::vector<EC::DetachedEntitySlot> shifted_entities;
+	std::vector<flecs::entity> shifted_entities;
 
 	if (!reset_cells) {
 		cells = (CellClass *) new char[sizeof(CellClass) * w * h];//new CellClass[w * h];
@@ -759,7 +759,8 @@ void MapClass::Set_Map_Dimensions(Rect const & rect, bool reset_cells, int cell_
 		cptr = Iterate();
 		cell = cptr->Fetch_CellID();
 		while (cptr != NULL) {
-			shifted_entities.emplace_back(cptr->Components.Release_Id());
+			shifted_entities.push_back(cptr->Entity);
+			cptr->Entity = flecs::entity::null();
 			*cells = *cptr;
 			cells->BridgeDeckCell = NULL;
 			cells->UnusedCell = NULL;
@@ -797,7 +798,7 @@ void MapClass::Set_Map_Dimensions(Rect const & rect, bool reset_cells, int cell_
 					cc->Set_CellID(cell);
 					Array[idx] = cc;
 				} else {
-					c->Components.Reset();
+					EC::Destroy_Entity(c->Entity);
 					c = new(c) CellClass;
 					c->Set_CellID(cell);
 				}
@@ -823,16 +824,24 @@ void MapClass::Set_Map_Dimensions(Rect const & rect, bool reset_cells, int cell_
 
 			Cell dcell = c->CellID;
 			if (c != NULL && c != &BlubCell) {
+				EC::Destroy_Entity(c->Entity);
 				*c = *cptr;
 				c->Set_CellID(dcell);
 				if (slot_index < shifted_entities.size()) {
-					c->Components.Adopt_Id(shifted_entities[slot_index].Release());
+					c->Entity = shifted_entities[slot_index];
+					shifted_entities[slot_index] = flecs::entity::null();
+					if (c->Entity.id() != 0 && c->Entity.is_alive()) {
+						c->Entity.set<EC::OwnerLink<CellClass>>({c});
+					}
 				}
 			}
 
 			slot_index++;
 			cellcount--;
 			cells++;
+		}
+		for (flecs::entity & leftover : shifted_entities) {
+			EC::Destroy_Entity(leftover);
 		}
 
 		Reset_Iterator();
@@ -956,7 +965,7 @@ void MapClass::Set_Map_Dimensions(Rect const & rect, bool reset_cells, int cell_
 		Fresh_Map();
 	}
 
-	BlubCell.Components.Reset();
+	EC::Destroy_Entity(BlubCell.Entity);
 	new(&BlubCell) CellClass;
 	delete (void *)cells_base; /// operator delete is called directly here.
 }
@@ -2260,6 +2269,7 @@ bool MapClass::Read_Binary_1(Straw & straw)
 		}
 	}
 
+	EC::Destroy_Entity(BlubCell.Entity);
 	new (&BlubCell) CellClass;
 	return(true);
 }
@@ -2295,6 +2305,7 @@ bool MapClass::Read_Binary_2(Straw & straw)
 		cell = CELL_NONE;
 		decomp.Get(&cell, sizeof(cell));
 	}
+	EC::Destroy_Entity(BlubCell.Entity);
 	new (&BlubCell) CellClass;
 	return(true);
 }
@@ -2327,6 +2338,7 @@ bool MapClass::Read_Binary_3(Straw & straw)
 		cell = CELL_NONE;
 		straw.Get(&cell, sizeof(cell));
 	}
+	EC::Destroy_Entity(BlubCell.Entity);
 	new (&BlubCell) CellClass;
 	return(true);
 }
@@ -2367,6 +2379,7 @@ bool MapClass::Read_Binary_4(Straw & straw)
 			decomp.Get(&tmp, sizeof(tmp));
 		}
 	}
+	EC::Destroy_Entity(BlubCell.Entity);
 	new (&BlubCell) CellClass;
 	return(terminated && !decomp.Is_Damaged());
 }
@@ -2409,6 +2422,7 @@ bool MapClass::Read_Binary_5(Straw & straw)
 			decomp.Get(&tmp, sizeof(tmp));
 		}
 	}
+	EC::Destroy_Entity(BlubCell.Entity);
 	new (&BlubCell) CellClass;
 	return(terminated && !decomp.Is_Damaged());
 }

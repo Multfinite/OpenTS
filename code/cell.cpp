@@ -216,7 +216,7 @@ LEPTON CellClass::Get_Height(Point2D const & point) const
 /// </summary>
 CellClass::~CellClass(void)
 {
-	Components.Reset();
+	EC::Destroy_Entity(Entity);
 
 	if (FoggedObjects) {
 		delete FoggedObjects;
@@ -320,7 +320,7 @@ CellClass::CellClass(void) :
 	Ramp(0),
 	Elevation(0),
 	AdjacentObjectCount(0),
-	Components(this)
+	Entity(EC::Create_Entity(this))
 {
 	Create_ID();
 	Flag.Composite = 0;

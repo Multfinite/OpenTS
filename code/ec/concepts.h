@@ -82,18 +82,18 @@ consteval std::uint32_t Component_Type_Tag_32(void) noexcept
 }
 
 // ---------------------------------------------------------------------------
-// Global Hook Concepts (G01..G12) — Generic & Root-Typed Signatures
+// Global Hook Concepts (G01..G12) — Void, flecs::entity, DerivedOwner & Root
 // ---------------------------------------------------------------------------
 
 #define OPENTS_EC_DEFINE_MUT_GLOBAL_CONCEPT(ConceptPrefix, MethodName) \
 	template<typename C> concept ConceptPrefix##Void = requires(C & c) { c.MethodName(); }; \
-	template<typename C> concept ConceptPrefix##View = requires(C & c, EntityView v) { c.MethodName(v); }; \
+	template<typename C> concept ConceptPrefix##Entity = requires(C & c, flecs::entity fe) { c.MethodName(fe); }; \
 	template<typename C> concept ConceptPrefix##DerivedOwner = \
 		HasDerivedObjectOwner<C> && requires(C & c, typename C::OwnerType & o) { c.MethodName(o); }; \
 	template<typename C, typename Root> concept ConceptPrefix##Root = \
 		EntityRoot<Root> && requires(C & c, Root & r) { c.MethodName(r); }; \
 	template<typename C> concept Has##ConceptPrefix = \
-		ConceptPrefix##Void<C> || ConceptPrefix##View<C> || \
+		ConceptPrefix##Void<C> || ConceptPrefix##Entity<C> || \
 		ConceptPrefix##DerivedOwner<C> || \
 		ConceptPrefix##Root<C, ObjectClass> || \
 		ConceptPrefix##Root<C, CellClass> || \
@@ -101,13 +101,13 @@ consteval std::uint32_t Component_Type_Tag_32(void) noexcept
 
 #define OPENTS_EC_DEFINE_CONST_GLOBAL_CONCEPT(ConceptPrefix, MethodName) \
 	template<typename C> concept ConceptPrefix##Void = requires(C const & c) { c.MethodName(); }; \
-	template<typename C> concept ConceptPrefix##View = requires(C const & c, EntityView v) { c.MethodName(v); }; \
+	template<typename C> concept ConceptPrefix##Entity = requires(C const & c, flecs::entity fe) { c.MethodName(fe); }; \
 	template<typename C> concept ConceptPrefix##DerivedOwner = \
 		HasDerivedObjectOwner<C> && requires(C const & c, typename C::OwnerType const & o) { c.MethodName(o); }; \
 	template<typename C, typename Root> concept ConceptPrefix##Root = \
 		EntityRoot<Root> && requires(C const & c, Root const & r) { c.MethodName(r); }; \
 	template<typename C> concept Has##ConceptPrefix = \
-		ConceptPrefix##Void<C> || ConceptPrefix##View<C> || \
+		ConceptPrefix##Void<C> || ConceptPrefix##Entity<C> || \
 		ConceptPrefix##DerivedOwner<C> || \
 		ConceptPrefix##Root<C, ObjectClass> || \
 		ConceptPrefix##Root<C, CellClass> || \
@@ -122,6 +122,11 @@ OPENTS_EC_DEFINE_CONST_GLOBAL_CONCEPT(PreRender, Pre_Render)          // G06
 OPENTS_EC_DEFINE_CONST_GLOBAL_CONCEPT(PostRender, Post_Render)        // G07
 OPENTS_EC_DEFINE_MUT_GLOBAL_CONCEPT(ScenarioInit, Scenario_Init)      // G08
 OPENTS_EC_DEFINE_MUT_GLOBAL_CONCEPT(PostLoad, Post_Load)              // G11
+
+// E01: Native flecs component on_add / on_remove lifecycle hooks
+OPENTS_EC_DEFINE_MUT_GLOBAL_CONCEPT(OnAdd, On_Add)
+OPENTS_EC_DEFINE_MUT_GLOBAL_CONCEPT(OnAttach, On_Attach)
+OPENTS_EC_DEFINE_MUT_GLOBAL_CONCEPT(OnRemove, On_Remove)
 
 #undef OPENTS_EC_DEFINE_MUT_GLOBAL_CONCEPT
 #undef OPENTS_EC_DEFINE_CONST_GLOBAL_CONCEPT
@@ -143,6 +148,11 @@ concept HasComputeCRCPlain = requires(C const & c, CRCEngine & crc) {
 };
 
 template<typename C>
+concept HasComputeCRCEntity = requires(C const & c, CRCEngine & crc, flecs::entity fe) {
+	c.Compute_CRC(crc, fe);
+};
+
+template<typename C>
 concept HasComputeCRCDerivedOwner = HasDerivedObjectOwner<C> &&
 	requires(C const & c, CRCEngine & crc, typename C::OwnerType const & o) {
 		c.Compute_CRC(crc, o);
@@ -156,6 +166,7 @@ concept HasComputeCRCRoot = EntityRoot<Root> && requires(C const & c, CRCEngine 
 template<typename C>
 concept HasComputeCRC =
 	HasComputeCRCPlain<C> ||
+	HasComputeCRCEntity<C> ||
 	HasComputeCRCDerivedOwner<C> ||
 	HasComputeCRCRoot<C, ObjectClass> ||
 	HasComputeCRCRoot<C, CellClass> ||
@@ -178,6 +189,9 @@ consteval bool Has_Any_Root_Typed_Hook_For(void) noexcept
 		PostRenderRoot<C, Root> ||
 		ScenarioInitRoot<C, Root> ||
 		PostLoadRoot<C, Root> ||
+		OnAddRoot<C, Root> ||
+		OnAttachRoot<C, Root> ||
+		OnRemoveRoot<C, Root> ||
 		HasComputeCRCRoot<C, Root>;
 }
 
@@ -213,23 +227,8 @@ template<typename C, typename Root>
 concept AllowedOnRoot = EntityRoot<Root> && Is_Allowed_On_Root<C, Root>();
 
 // ---------------------------------------------------------------------------
-// Entity-Scoped Hook Concepts (E01..E27)
+// Entity-Scoped Hook Concepts (E02..E26)
 // ---------------------------------------------------------------------------
-
-// E01: On_Attach / On_Remove
-template<typename C>
-concept HasOnAttachVoid = requires(C & c) { c.On_Attach(); };
-template<typename C>
-concept HasOnAttachView = requires(C & c, EntityView v) { c.On_Attach(v); };
-template<typename C, typename Root>
-concept HasOnAttachRoot = EntityRoot<Root> && requires(C & c, Root & r) { c.On_Attach(r); };
-
-template<typename C>
-concept HasOnRemoveVoid = requires(C & c) { c.On_Remove(); };
-template<typename C>
-concept HasOnRemoveView = requires(C & c, EntityView v) { c.On_Remove(v); };
-template<typename C, typename Root>
-concept HasOnRemoveRoot = EntityRoot<Root> && requires(C & c, Root & r) { c.On_Remove(r); };
 
 // E02: Detach (dangling pointer scrub)
 template<typename C>
@@ -242,7 +241,7 @@ concept HasDetachRoot = EntityRoot<Root> && requires(C & c, Root & self, Abstrac
 };
 
 // E03..E26: Parameterized entity event concepts so exact engine argument types
-// forward statically with zero dynamic wrappers or header coupling.
+// forward statically with zero dynamic wrappers.
 #define OPENTS_EC_DEFINE_ENTITY_CONCEPT(ConceptName, MethodName) \
 	template<typename C, typename SelfT, typename... Args> \
 	concept ConceptName##WithSelf = requires(C & c, SelfT & self, Args... args) { \

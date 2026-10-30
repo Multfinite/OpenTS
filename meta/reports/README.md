@@ -36,5 +36,6 @@ updated: "2026-10-30"
 | [`2026-10-30-analysis-ec-flecs.md`](software/2026-10-30-analysis-ec-flecs.md) | `software` | `software/analysis` | `analysis` |
 | [`2026-10-30-static-ec-flecs-implementation.md`](software/2026-10-30-static-ec-flecs-implementation.md) | `software` | `software/code` | `task` |
 | [`2026-10-30-demo-produce-cash-component.md`](software/2026-10-30-demo-produce-cash-component.md) | `software` | `software/code` | `task` |
+| [`2026-10-30-eager-flecs-entity-root-lifetime.md`](software/2026-10-30-eager-flecs-entity-root-lifetime.md) | `software` | `software/code` | `task` |
 
 Новый отчёт обязан появиться в этой таблице (`HYAI-ART-13`): `check_report.py` сверяет индекс с файловой системой.

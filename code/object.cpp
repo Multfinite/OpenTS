@@ -175,9 +175,9 @@ ObjectClass::ObjectClass(void) :
 	Tag(NULL),
 	Strength(255),
 	Position(COORD_NONE),
-	Components(this)
+	Entity(EC::Create_Entity(this))
 {
-	Components.Set_Disabled(true);
+	Entity.add(flecs::Disabled);
 	Objects.Add(this);
 	ObjectPtrTracker.Add(this);
 	AbstractTypePtrTracker.Add(this);
@@ -192,7 +192,7 @@ ObjectClass::ObjectClass(void) :
 /// </summary>
 ObjectClass::~ObjectClass(void)
 {
-	Components.Reset();
+	EC::Destroy_Entity(Entity);
 	AmbientSounds.Detach(this);
 	ObjectsToDelete.Delete(this);
 	Objects.Delete(this);
@@ -2089,7 +2089,11 @@ void ObjectClass::Serialize(SaveStreamClass & stream)
 	stream.Serialize(Position);
 
 	if (stream.Is_Loading()) {
-		Components.Set_Disabled(IsInLimbo);
+		if (IsInLimbo) {
+			Entity.add(flecs::Disabled);
+		} else {
+			Entity.remove(flecs::Disabled);
+		}
 	}
 }
 

@@ -31,15 +31,18 @@ namespace EC::Hooks {
 
 namespace {
 
-bool GComponentsRegistered = false;
-
-void Ensure_Registered(void)
+void Register_Game_Components(flecs::world & world)
 {
-	if (!GComponentsRegistered) {
-		GameComponents::Register_All(World());
-		GComponentsRegistered = true;
-	}
+	GameComponents::Register_All(world);
 }
+
+struct AutoWorldRegistrationHook
+{
+	AutoWorldRegistrationHook(void) noexcept
+	{
+		Set_World_Init_Hook(&Register_Game_Components);
+	}
+} const GAutoWorldRegistrationHook;
 
 StableOwnerKey Build_Stable_Owner_Key(RootKind kind, void const * ptr)
 {
@@ -67,7 +70,7 @@ StableOwnerKey Build_Stable_Owner_Key(RootKind kind, void const * ptr)
 			}
 			int subslot = 0;
 			for (ILocomotion * cur = foot->Locomotion.get(); cur != nullptr; ++subslot) {
-				if (cur->Components().Owner() == loco) {
+				if (cur->Get_Entity().id() == loco->Entity.id()) {
 					break;
 				}
 				IPiggyback * piggy = Piggyback_Of(cur);
@@ -79,19 +82,18 @@ StableOwnerKey Build_Stable_Owner_Key(RootKind kind, void const * ptr)
 	return StableOwnerKey{static_cast<std::uint8_t>(kind), -1, 0};
 }
 
-} // namespace
-
-// ---------------------------------------------------------------------------
-// Component Attachment Helpers
-// ---------------------------------------------------------------------------
-
-void Ensure_Produce_Cash(BuildingClass & self)
+LocomotionClass * As_Locomotion_Root(ILocomotion & loco) noexcept
 {
-	Ensure_Registered();
-	if (!self.Components.Has<ProduceCashComponent>()) {
-		self.Components.Emplace<ProduceCashComponent>();
+	flecs::entity fe = loco.Get_Entity();
+	if (fe.id() != 0 && fe.is_alive()) {
+		if (auto const * link = fe.try_get<OwnerLink<LocomotionClass>>(); link != nullptr) {
+			return link->ptr;
+		}
 	}
+	return nullptr;
 }
+
+} // namespace
 
 // ---------------------------------------------------------------------------
 // Global Hooks (G01..G12)
@@ -100,8 +102,6 @@ void Ensure_Produce_Cash(BuildingClass & self)
 void AI_All(void)
 {
 	if constexpr (GameComponents::count > 0) {
-		if (Live_Entity_Count() == 0) return;
-		Ensure_Registered();
 		GameComponents::AI_All(World());
 	}
 }
@@ -109,8 +109,6 @@ void AI_All(void)
 void PostAI_All(void)
 {
 	if constexpr (GameComponents::count > 0) {
-		if (Live_Entity_Count() == 0) return;
-		Ensure_Registered();
 		GameComponents::PostAI_All(World());
 	}
 }
@@ -118,8 +116,6 @@ void PostAI_All(void)
 void Environment_AI_All(void)
 {
 	if constexpr (GameComponents::count > 0) {
-		if (Live_Entity_Count() == 0) return;
-		Ensure_Registered();
 		GameComponents::Environment_AI_All(World());
 	}
 }
@@ -127,8 +123,6 @@ void Environment_AI_All(void)
 void Frame_Begin_All(void)
 {
 	if constexpr (GameComponents::count > 0) {
-		if (Live_Entity_Count() == 0) return;
-		Ensure_Registered();
 		GameComponents::Frame_Begin_All(World());
 	}
 }
@@ -136,8 +130,6 @@ void Frame_Begin_All(void)
 void Frame_End_All(void)
 {
 	if constexpr (GameComponents::count > 0) {
-		if (Live_Entity_Count() == 0) return;
-		Ensure_Registered();
 		GameComponents::Frame_End_All(World());
 	}
 }
@@ -145,8 +137,6 @@ void Frame_End_All(void)
 void Pre_Render_All(void)
 {
 	if constexpr (GameComponents::count > 0) {
-		if (Live_Entity_Count() == 0) return;
-		Ensure_Registered();
 		GameComponents::Pre_Render_All(World());
 	}
 }
@@ -154,17 +144,13 @@ void Pre_Render_All(void)
 void Post_Render_All(void)
 {
 	if constexpr (GameComponents::count > 0) {
-		if (Live_Entity_Count() == 0) return;
-		Ensure_Registered();
 		GameComponents::Post_Render_All(World());
 	}
 }
 
 void Scenario_Init_All(void)
 {
-	Ensure_Registered();
 	if constexpr (GameComponents::count > 0) {
-		if (Live_Entity_Count() == 0) return;
 		GameComponents::Scenario_Init_All(World());
 	}
 }
@@ -172,45 +158,44 @@ void Scenario_Init_All(void)
 void Scenario_Clear_All(void)
 {
 	GameComponents::Scenario_Clear_All();
-	World_Reset();
-	GComponentsRegistered = false;
-	Ensure_Registered();
 }
 
 bool Save_Trailer(SaveStreamClass & stream)
 {
-	if (Live_Entity_Count() == 0) {
-		return !stream.Was_Error();
-	}
-	Ensure_Registered();
-	return GameComponents::Save_Trailer(
-		World(),
-		stream,
-		[](RootKind, void const * owner_ptr) -> SwizzleIDType {
-			return Swizzler.Registered_ID_Of(owner_ptr);
-		});
+	auto id_of = [](RootKind kind, void const * ptr) -> std::uint32_t {
+		void const * swizzle_key = ptr;
+		if (kind == RootKind::Locomotor && ptr != nullptr) {
+			swizzle_key = static_cast<IPersistent const *>(static_cast<LocomotionClass const *>(ptr));
+		}
+		return static_cast<std::uint32_t>(Swizzler.Registered_ID_Of(swizzle_key));
+	};
+	return GameComponents::Save_Trailer(World(), stream, id_of);
 }
 
 bool Load_Trailer(SaveStreamClass & stream)
 {
-	if (stream.Offset() >= stream.Size()) {
-		return !stream.Was_Error();
-	}
-	Ensure_Registered();
 	Swizzler.Prepare_Address_Lookup();
-	return GameComponents::Load_Trailer(
-		World(),
-		stream,
-		[](RootKind, SwizzleIDType swizzle_id) -> void * {
-			return Swizzler.Address_Of(swizzle_id);
-		});
+	auto resolve_owner_entity = [](RootKind kind, std::uint32_t owner_id) -> flecs::entity {
+		void * raw = Swizzler.Address_Of(static_cast<SwizzleIDType>(owner_id));
+		if (raw == nullptr) {
+			return flecs::entity::null();
+		}
+		switch (kind) {
+			case RootKind::Object:
+				return static_cast<ObjectClass *>(raw)->Entity;
+			case RootKind::Cell:
+				return static_cast<CellClass *>(raw)->Entity;
+			case RootKind::Locomotor:
+				return static_cast<LocomotionClass *>(static_cast<IPersistent *>(raw))->Entity;
+		}
+		return flecs::entity::null();
+	};
+	return GameComponents::Load_Trailer(World(), stream, resolve_owner_entity);
 }
 
 void Post_Load_All(void)
 {
 	if constexpr (GameComponents::count > 0) {
-		if (Live_Entity_Count() == 0) return;
-		Ensure_Registered();
 		GameComponents::Post_Load_All(World());
 	}
 }
@@ -218,22 +203,13 @@ void Post_Load_All(void)
 void Compute_Cell_CRCs(CRCEngine & crc)
 {
 	if constexpr (GameComponents::count > 0) {
-		if (Live_Entity_Count() == 0) return;
-		Ensure_Registered();
 		GameComponents::Compute_Root_CRC_All<CellClass>(World(), crc, Build_Stable_Owner_Key);
-	} else {
-		(void)crc;
 	}
 }
 
 void Print_Component_CRCs(FILE * fp)
 {
-	if (fp == nullptr || Live_Entity_Count() == 0) {
-		return;
-	}
 	if constexpr (GameComponents::count > 0) {
-		Ensure_Registered();
-		std::fprintf(fp, "\n----- Component checksums -----\n");
 		GameComponents::Print_Component_CRCs(World(), fp, Build_Stable_Owner_Key);
 	}
 }
@@ -241,27 +217,19 @@ void Print_Component_CRCs(FILE * fp)
 void Accumulate_Game_CRC(unsigned int & game_crc)
 {
 	if constexpr (GameComponents::count > 0) {
-		if (Live_Entity_Count() == 0) return;
-		Ensure_Registered();
-		CRCEngine comp_crc;
-		GameComponents::Compute_CRC_All(World(), comp_crc, Build_Stable_Owner_Key);
-		int const digest = comp_crc();
-		if (digest != 0) {
-			Add_CRC(&game_crc, static_cast<unsigned int>(digest));
-		}
-	} else {
-		(void)game_crc;
+		CRCEngine crc;
+		GameComponents::Compute_CRC_All(World(), crc, Build_Stable_Owner_Key);
+		Add_CRC(&game_crc, static_cast<unsigned int>(crc()));
 	}
 }
 
 void Shutdown_World(void)
 {
-	GComponentsRegistered = false;
 	World_Shutdown();
 }
 
 // ---------------------------------------------------------------------------
-// Out-of-line Entity Hook Slow Paths (E02..E27)
+// Out-of-line Entity Dispatchers (E02..E27)
 // ---------------------------------------------------------------------------
 
 namespace Detail {
@@ -291,14 +259,18 @@ void Dispatch_Object_Unlimbo(ObjectClass & self, Coord const & coord, Dir256 dir
 	GameComponents::Dispatch_Unlimbo(self, coord, dir);
 }
 
-void Dispatch_Loco_Limbo(LocomotionClass & self)
+void Dispatch_Loco_Limbo(ILocomotion & loco)
 {
-	GameComponents::Dispatch_Limbo(self);
+	if (LocomotionClass * root = As_Locomotion_Root(loco); root != nullptr) {
+		GameComponents::Dispatch_Limbo(*root);
+	}
 }
 
-void Dispatch_Loco_Unlimbo(LocomotionClass & self)
+void Dispatch_Loco_Unlimbo(ILocomotion & loco)
 {
-	GameComponents::Dispatch_Unlimbo(self);
+	if (LocomotionClass * root = As_Locomotion_Root(loco); root != nullptr) {
+		GameComponents::Dispatch_Unlimbo(*root);
+	}
 }
 
 void Dispatch_Delete_Me(ObjectClass & self)
@@ -471,24 +443,32 @@ void Dispatch_Link_To_Object(LocomotionClass & self, FootClass * object)
 	GameComponents::Dispatch_Link_To_Object(self, object);
 }
 
-void Dispatch_Loco_Process(LocomotionClass & self)
+void Dispatch_Loco_Process(ILocomotion & loco)
 {
-	GameComponents::Dispatch_Loco_Process(self);
+	if (LocomotionClass * root = As_Locomotion_Root(loco); root != nullptr) {
+		GameComponents::Dispatch_Loco_Process(*root);
+	}
 }
 
-void Dispatch_Loco_PostProcess(LocomotionClass & self, bool moving)
+void Dispatch_Loco_PostProcess(ILocomotion & loco, bool moving)
 {
-	GameComponents::Dispatch_Loco_PostProcess(self, moving);
+	if (LocomotionClass * root = As_Locomotion_Root(loco); root != nullptr) {
+		GameComponents::Dispatch_Loco_PostProcess(*root, moving);
+	}
 }
 
-void Dispatch_Move_To(LocomotionClass & self, Coord to)
+void Dispatch_Move_To(ILocomotion & loco, Coord to)
 {
-	GameComponents::Dispatch_Move_To(self, to);
+	if (LocomotionClass * root = As_Locomotion_Root(loco); root != nullptr) {
+		GameComponents::Dispatch_Move_To(*root, to);
+	}
 }
 
-void Dispatch_Stop_Moving(LocomotionClass & self)
+void Dispatch_Stop_Moving(ILocomotion & loco)
 {
-	GameComponents::Dispatch_Stop_Moving(self);
+	if (LocomotionClass * root = As_Locomotion_Root(loco); root != nullptr) {
+		GameComponents::Dispatch_Stop_Moving(*root);
+	}
 }
 
 void Dispatch_Power_On(LocomotionClass & self)
@@ -516,19 +496,9 @@ void Dispatch_Draw_Matrix(LocomotionClass & self, Matrix3D & matrix, int * key)
 	GameComponents::Dispatch_Draw_Matrix(self, matrix, key);
 }
 
-void Compute_Object_CRC(ObjectClass const & self, CRCEngine & crc)
+void Compute_Entity_CRC(flecs::entity fe, CRCEngine & crc)
 {
-	GameComponents::Compute_Entity_CRC(self.Components, crc);
-}
-
-void Compute_Cell_CRC(CellClass const & self, CRCEngine & crc)
-{
-	GameComponents::Compute_Entity_CRC(self.Components, crc);
-}
-
-void Compute_Loco_CRC(LocomotionClass const & self, CRCEngine & crc)
-{
-	GameComponents::Compute_Entity_CRC(self.Components(), crc);
+	GameComponents::Compute_Entity_CRC(fe, crc);
 }
 
 } // namespace Detail

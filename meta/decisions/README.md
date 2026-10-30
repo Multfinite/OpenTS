@@ -23,12 +23,13 @@ updated: "2026-10-30"
 | `picture` | [`picture/`](picture/README.md) | `PIC` | зарезервировано каркасом |
 | `video` | [`video/`](video/README.md) | `VID` | зарезервировано каркасом |
 
-## Действующие решения
+## Реестр решений
 
 | ID | Область | Название | Статус |
 | --- | --- | --- | --- |
 | [`P-0001`](project/P-0001-hyai-contracts-and-clean-export.md) | project | Приоритет контрактов HYAI и правило чистого экспорта ветки | approved |
-| [`SW-0001`](software/SW-0001-static-ec-flecs-architecture.md) | software | Статически типизированная EC-система на базе `flecs` (без ECS-систем) | approved |
+| [`SW-0001`](software/SW-0001-static-ec-flecs-architecture.md) | software | Статически типизированная EC-система на базе `flecs` (без ECS-систем) | superseded (`SW-0002`) |
+| [`SW-0002`](software/SW-0002-eager-flecs-entity-root-lifetime.md) | software | Жизненный цикл `flecs::entity` 1-к-1 с корнем и прямая работа в парадигме `flecs` | approved |
 
 ## Правила
 

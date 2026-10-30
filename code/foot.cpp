@@ -3547,6 +3547,9 @@ void FootClass::Serialize(SaveStreamClass & stream)
 		Save_Object(stream, Locomotion.get());
 	} else {
 		Locomotion = Load_Locomotor(stream);
+		if (Locomotion != nullptr && IsInLimbo) {
+			Locomotion->Get_Entity().add(flecs::Disabled);
+		}
 	}
 
 	stream.Serialize(HeadToCoord);

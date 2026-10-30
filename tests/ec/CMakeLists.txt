@@ -1,8 +1,9 @@
 # Exercises the static C++20 entity-component layer over the real vendored flecs storage:
-# lazy TypedEntity<Root> materialization across ObjectClass, CellClass, and LocomotionClass,
-# compile-time ComponentRegistry<Ts...> recursion for all 39 global and entity hooks,
-# flecs::Disabled suspension for limbo and piggybacked locomotors, the two-subpass EC01
-# save trailer with pointer swizzle stability, and all four levels of Compute_CRC.
+# 1:1 flecs::entity root lifetime across ObjectClass, CellClass, and LocomotionClass,
+# native flecs component operations and observers, compile-time ComponentRegistry<Ts...>
+# dispatch for all 39 global and entity hooks, flecs::Disabled suspension for limbo and
+# piggybacked locomotors, the two-subpass EC01 save trailer with pointer swizzle stability,
+# and all four levels of Compute_CRC.
 
 opents_add_test(ECTest
     NAME ec

@@ -262,8 +262,7 @@ struct ILocomotion
 	virtual int Get_Speed_Accum(void) = 0;
 
 	/*
-	 * Lazily materialized component-holder bound to this locomotor.
+	 * Underlying flecs entity owned 1:1 by this locomotor.
 	 */
-	virtual EC::TypedEntity<LocomotionClass> & Components(void) noexcept = 0;
-	virtual EC::TypedEntity<LocomotionClass> const & Components(void) const noexcept = 0;
+	virtual flecs::entity Get_Entity(void) const noexcept = 0;
 };

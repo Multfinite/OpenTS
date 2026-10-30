@@ -15,4 +15,5 @@ updated: "2026-10-30"
 
 | ID | Название | Статус |
 | --- | --- | --- |
-| [`SW-0001`](SW-0001-static-ec-flecs-architecture.md) | Статически типизированная EC-система на базе `flecs` (без ECS-систем) | approved |
+| [`SW-0001`](SW-0001-static-ec-flecs-architecture.md) | Статически типизированная EC-система на базе `flecs` (без ECS-систем) | superseded (`SW-0002`) |
+| [`SW-0002`](SW-0002-eager-flecs-entity-root-lifetime.md) | Жизненный цикл `flecs::entity` 1-к-1 с корнем и прямая работа в парадигме `flecs` | approved |

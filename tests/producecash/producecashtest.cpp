@@ -8,14 +8,16 @@
  ******************************************************************************/
 
 // Standalone C++20 contract test for EC::ProduceCashComponent registered in the
-// production EC::GameComponents list over real flecs storage, real FrameTimerClass
-// countdown timers, binary EC01 save/load streams, and CRCEngine.
+// production EC::GameComponents list over real flecs storage with 1:1 flecs::entity
+// root lifetime, real FrameTimerClass countdown timers, binary EC01 save/load streams,
+// and CRCEngine.
 
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <limits>
+#include <memory>
 #include <vector>
 
 #include "crc.h"
@@ -113,27 +115,32 @@ class ObjectClass : public AbstractClass
 {
 	public:
 		explicit ObjectClass(int id = 1)
-			: Components(this)
+			: Entity(EC::Create_Entity(this))
 		{
 			ID = id;
-			Components.Set_Disabled(true); // Objects start in Limbo.
+			Entity.add(flecs::Disabled); // Objects start in Limbo.
+		}
+
+		~ObjectClass(void) override
+		{
+			EC::Destroy_Entity(Entity);
 		}
 
 		bool IsActive = true;
 		bool IsInLimbo = true;
 		int Strength = 200;
-		EC::TypedEntity<ObjectClass> Components;
+		flecs::entity Entity;
 
 		void Unlimbo(void)
 		{
 			IsInLimbo = false;
-			Components.Set_Disabled(false);
+			Entity.remove(flecs::Disabled);
 		}
 
 		void Limbo(void)
 		{
 			IsInLimbo = true;
-			Components.Set_Disabled(true);
+			Entity.add(flecs::Disabled);
 		}
 };
 
@@ -172,22 +179,24 @@ class BuildingClass : public TechnoClass
 class CellClass : public AbstractClass
 {
 	public:
-		EC::TypedEntity<CellClass> Components{this};
+		CellClass(void) : Entity(EC::Create_Entity(this)) {}
+		~CellClass(void) override { EC::Destroy_Entity(Entity); }
+		flecs::entity Entity;
 };
 
 struct ILocomotion
 {
 	virtual ~ILocomotion(void) = default;
-	virtual EC::TypedEntity<LocomotionClass> & Components(void) noexcept = 0;
-	virtual EC::TypedEntity<LocomotionClass> const & Components(void) const noexcept = 0;
+	virtual flecs::entity Get_Entity(void) const noexcept = 0;
 };
 
 class LocomotionClass : public ILocomotion
 {
 	public:
-		EC::TypedEntity<LocomotionClass> Holder{this};
-		EC::TypedEntity<LocomotionClass> & Components(void) noexcept override { return Holder; }
-		EC::TypedEntity<LocomotionClass> const & Components(void) const noexcept override { return Holder; }
+		LocomotionClass(void) : Entity(EC::Create_Entity(this)) {}
+		~LocomotionClass(void) override { EC::Destroy_Entity(Entity); }
+		flecs::entity Get_Entity(void) const noexcept override { return Entity; }
+		flecs::entity Entity;
 };
 
 // Include production EC::GameComponents (with ProduceCashComponent!) and registry.h.
@@ -319,8 +328,8 @@ class MemorySaveStream
 
 void Attach_If_Needed(BuildingClass & b)
 {
-	if (b.Class != nullptr && b.Class->Has_Produce_Cash() && !b.Components.Has<EC::ProduceCashComponent>()) {
-		b.Components.Emplace<EC::ProduceCashComponent>();
+	if (b.Class != nullptr && b.Class->Has_Produce_Cash()) {
+		b.Entity.add<EC::ProduceCashComponent>();
 	}
 }
 
@@ -352,17 +361,17 @@ void Advance_Frames(int count)
 	}
 }
 
-void Reset_Sim(void)
+void Register_Game_Components_Hook(flecs::world & world)
 {
-	Frame = 100;
-	EC::World_Reset();
-	EC::GameComponents::Register_All(EC::World());
+	EC::GameComponents::Register_All(world);
 }
 
 } // namespace
 
 int main(void)
 {
+	EC::Set_World_Init_Hook(&Register_Game_Components_Hook);
+
 	// 1. Compile-time registration & root affinity contracts
 	static_assert(EC::GameComponents::count == 1);
 	static_assert(EC::IsRegisteredComponent<EC::ProduceCashComponent>);
@@ -370,26 +379,32 @@ int main(void)
 	static_assert(!EC::AllowedOnRoot<EC::ProduceCashComponent, CellClass>);
 	static_assert(!EC::AllowedOnRoot<EC::ProduceCashComponent, LocomotionClass>);
 
-	// 2. Non-cash buildings allocate zero flecs entities
+	// 2. Non-cash buildings own a 1:1 flecs::entity without attaching ProduceCashComponent
 	{
-		Reset_Sim();
+		Frame = 100;
 		HouseTypeClass active_country{false};
 		HouseClass player(&active_country, 0);
 		BuildingTypeClass power_plant{};
-		BuildingClass b1(&power_plant, &player, 1);
-		Attach_If_Needed(b1);
-		b1.Unlimbo();
-		Do_Grand_Opening(b1);
-		Advance_Frames(20);
+		flecs::entity_t tracked_id = 0;
+		{
+			BuildingClass b1(&power_plant, &player, 1);
+			tracked_id = b1.Entity.id();
+			Attach_If_Needed(b1);
+			b1.Unlimbo();
+			Do_Grand_Opening(b1);
+			Advance_Frames(20);
 
-		Check(!b1.Components.Is_Materialized() && EC::Live_Entity_Count() == 0,
-			"non-cash BuildingType leaves BuildingClass unmaterialized");
+			Check(b1.Entity.is_alive() && !b1.Entity.has<EC::ProduceCashComponent>() && !EC::Has_User_Components(b1.Entity),
+				"non-cash BuildingClass owns 1:1 entity without ProduceCashComponent");
+		}
+		Check(!EC::World().entity(tracked_id).is_alive(),
+			"~BuildingClass() destroys 1:1 flecs::entity on scope exit");
 	}
 
 	// 3. Exact ProduceCashDelay interval, unopened shroud suppression, Limbo suspension,
 	//    and independent per-structure phase
 	{
-		Reset_Sim();
+		Frame = 100;
 		HouseTypeClass active_country{false};
 		HouseClass player(&active_country, 0);
 		BuildingTypeClass derrick{};
@@ -433,7 +448,7 @@ int main(void)
 
 	// 4. Selling (MISSION_DECONSTRUCTION), Strength == 0 dying state, and MultiplayPassive owner
 	{
-		Reset_Sim();
+		Frame = 100;
 		HouseTypeClass active_country{false};
 		HouseTypeClass neutral_country{true};
 		HouseClass player(&active_country, 0);
@@ -465,7 +480,7 @@ int main(void)
 
 	// 5. Finite ProduceCashBudget & clamped final installment
 	{
-		Reset_Sim();
+		Frame = 100;
 		HouseTypeClass active_country{false};
 		HouseClass player(&active_country, 0);
 
@@ -488,13 +503,13 @@ int main(void)
 		Advance_Frames(20);
 
 		Check(after_1 == 100 && after_2 == 200 && after_3 == 250 && player.Credits == 250 &&
-			b.Components.Get<EC::ProduceCashComponent>().Remaining == 0,
+			b.Entity.get<EC::ProduceCashComponent>().Remaining == 0,
 			"ProduceCashBudget=250 with Amount=100 pays 100, 100, 50 and stops");
 	}
 
 	// 6. Negative ProduceCashAmount (upkeep drain), broke house budget accounting, and INT_MIN guard
 	{
-		Reset_Sim();
+		Frame = 100;
 		HouseTypeClass active_country{false};
 		HouseClass player(&active_country, 80);
 		player.TiberiumCredits = 20; // Total liquid = 100
@@ -511,14 +526,14 @@ int main(void)
 
 		Advance_Frames(4); // Drains 60 (Credits: 20, Tib: 20, Remaining: 90)
 		bool const step1_ok = (player.Credits == 20 && player.TiberiumCredits == 20 &&
-			b.Components.Get<EC::ProduceCashComponent>().Remaining == 90);
+			b.Entity.get<EC::ProduceCashComponent>().Remaining == 90);
 
 		Advance_Frames(4); // Drains 60 -> exhausts 20 Credits + 20 Tib (0 left, Remaining: 30)
 		bool const step2_ok = (player.Credits == 0 && player.TiberiumCredits == 0 &&
-			b.Components.Get<EC::ProduceCashComponent>().Remaining == 30);
+			b.Entity.get<EC::ProduceCashComponent>().Remaining == 30);
 
 		Advance_Frames(4); // Clamped to -30, house has 0, Remaining still reaches 0!
-		bool const step3_ok = (b.Components.Get<EC::ProduceCashComponent>().Remaining == 0 &&
+		bool const step3_ok = (b.Entity.get<EC::ProduceCashComponent>().Remaining == 0 &&
 			player.TotalSpent == 150);
 
 		upkeep.ProduceCashAmount = std::numeric_limits<int>::min();
@@ -529,13 +544,13 @@ int main(void)
 		Do_Grand_Opening(b_min);
 		Advance_Frames(10);
 
-		Check(step1_ok && step2_ok && step3_ok && !b_min.Components.Is_Materialized(),
+		Check(step1_ok && step2_ok && step3_ok && !b_min.Entity.has<EC::ProduceCashComponent>(),
 			"negative upkeep drains credits/tiberium, clamps budget, and ignores INT_MIN");
 	}
 
 	// 7. Credit overflow refuses payment without deducting budget
 	{
-		Reset_Sim();
+		Frame = 100;
 		HouseTypeClass active_country{false};
 		HouseClass rich(&active_country, std::numeric_limits<int>::max() - 50);
 
@@ -551,18 +566,18 @@ int main(void)
 
 		Advance_Frames(5); // Overflow refused; Remaining must stay 200!
 		bool const refused_intact = (rich.Credits == std::numeric_limits<int>::max() - 50 &&
-			b.Components.Get<EC::ProduceCashComponent>().Remaining == 200);
+			b.Entity.get<EC::ProduceCashComponent>().Remaining == 200);
 
 		rich.Credits = 1000;
 		Advance_Frames(5); // Next interval succeeds!
 		Check(refused_intact && rich.Credits == 1100 &&
-			b.Components.Get<EC::ProduceCashComponent>().Remaining == 100,
+			b.Entity.get<EC::ProduceCashComponent>().Remaining == 100,
 			"credit overflow refuses payout without charging budget");
 	}
 
 	// 8. Powered=yes pause & resume with exact remaining frames
 	{
-		Reset_Sim();
+		Frame = 100;
 		HouseTypeClass active_country{false};
 		HouseClass player(&active_country, 0);
 
@@ -612,7 +627,7 @@ int main(void)
 
 	// 9. Capture: timer restart, ProduceCashResetOnCapture, Startup bonus, and StartupOneTime
 	{
-		Reset_Sim();
+		Frame = 100;
 		HouseTypeClass neutral_country{true};
 		HouseTypeClass active_country{false};
 		HouseClass neutral(&neutral_country, 0);
@@ -635,11 +650,11 @@ int main(void)
 		// Neutral -> GDI capture: pays 1000 startup bonus; budget stays 100 (startup doesn't count against budget)
 		Do_Capture(b, &gdi);
 		bool const first_capture_ok = (gdi.Credits == 1000 &&
-			b.Components.Get<EC::ProduceCashComponent>().Remaining == 100);
+			b.Entity.get<EC::ProduceCashComponent>().Remaining == 100);
 
 		Advance_Frames(10); // GDI earns 100 recurring -> budget spent (Remaining == 0)
 		bool const spent_ok = (gdi.Credits == 1100 &&
-			b.Components.Get<EC::ProduceCashComponent>().Remaining == 0);
+			b.Entity.get<EC::ProduceCashComponent>().Remaining == 0);
 
 		// GDI -> Nod capture (player-to-player, ResetOnCapture=false): no startup, budget stays 0
 		Do_Capture(b, &nod);
@@ -658,7 +673,7 @@ int main(void)
 		Do_Capture(b, &gdi); // From Nod (non-neutral): no startup, but budget refills to 100!
 		Advance_Frames(10);
 		bool const refill_ok = (gdi.Credits == 1200 &&
-			b.Components.Get<EC::ProduceCashComponent>().Remaining == 0);
+			b.Entity.get<EC::ProduceCashComponent>().Remaining == 0);
 
 		Do_Capture(b, &neutral);
 		Do_Capture(b, &nod); // From Neutral with OneTime=false: pays 1000 startup + refills 100!
@@ -671,7 +686,7 @@ int main(void)
 
 	// 10. EC01 two-subpass Save/Load round-trip & 4-level deterministic CRC
 	{
-		Reset_Sim();
+		Frame = 100;
 		HouseTypeClass neutral_country{true};
 		HouseTypeClass active_country{false};
 		HouseClass neutral(&neutral_country, 0);
@@ -685,21 +700,6 @@ int main(void)
 		derrick.ProduceCashDelay = 10;
 		derrick.ProduceCashBudget = 250;
 
-		BuildingClass b(&derrick, &neutral, 88);
-		Attach_If_Needed(b);
-		b.Unlimbo();
-		Do_Grand_Opening(b);
-		Do_Capture(b, &player); // Startup 500 paid, IsStartupPaid = true, Timer = 10, Remaining = 250
-
-		Advance_Frames(4); // 6 frames left on Timer
-		player.PowerFraction = 0.25;
-		Advance_Frames(1); // Pauses Timer with 5 frames left (Frame advanced by 1 before Stop)
-		int const saved_ticks_left = b.Components.Get<EC::ProduceCashComponent>().Timer.Value();
-
-		CRCEngine obj_crc_before;
-		b.Components.Compute_CRC(obj_crc_before);
-		int const single_crc_before = EC::Single_Component_CRC(b.Components.Get<EC::ProduceCashComponent>());
-
 		auto owner_id_fn = [](EC::RootKind, void const * ptr) -> std::uint32_t {
 			return static_cast<std::uint32_t>(static_cast<ObjectClass const *>(ptr)->Fetch_ID());
 		};
@@ -710,46 +710,69 @@ int main(void)
 				0};
 		};
 
-		CRCEngine world_crc_before;
-		EC::GameComponents::Compute_CRC_All(EC::World(), world_crc_before, owner_key_fn);
-
 		MemorySaveStream writer(true);
-		bool const save_ok = EC::GameComponents::Save_Trailer(EC::World(), writer, owner_id_fn);
+		int saved_ticks_left = 0;
+		int single_crc_before = 0;
+		int obj_crc_val_before = 0;
+		int world_crc_val_before = 0;
+		bool save_ok = false;
 
-		// Destroy world and reconstruct loaded BuildingClass (as ClassFactory does on Load_Game).
-		EC::World_Reset();
-		EC::GameComponents::Register_All(EC::World());
+		{
+			auto b = std::make_unique<BuildingClass>(&derrick, &neutral, 88);
+			Attach_If_Needed(*b);
+			b->Unlimbo();
+			Do_Grand_Opening(*b);
+			Do_Capture(*b, &player); // Startup 500 paid, IsStartupPaid = true, Timer = 10, Remaining = 250
 
+			Advance_Frames(4); // 6 frames left on Timer
+			player.PowerFraction = 0.25;
+			Advance_Frames(1); // Pauses Timer with 5 frames left (Frame advanced by 1 before Stop)
+			saved_ticks_left = b->Entity.get<EC::ProduceCashComponent>().Timer.Value();
+
+			CRCEngine obj_crc_before;
+			EC::GameComponents::Compute_Entity_CRC(b->Entity, obj_crc_before);
+			obj_crc_val_before = obj_crc_before();
+			single_crc_before = EC::Single_Component_CRC(b->Entity.get<EC::ProduceCashComponent>());
+
+			CRCEngine world_crc_before;
+			EC::GameComponents::Compute_CRC_All(EC::World(), world_crc_before, owner_key_fn);
+			world_crc_val_before = world_crc_before();
+
+			save_ok = EC::GameComponents::Save_Trailer(EC::World(), writer, owner_id_fn);
+			// ~BuildingClass() runs here -> destroys saved building's flecs::entity 1:1 (as Clear_Scenario does!)
+		}
+
+		// Reconstruct loaded BuildingClass with its own 1:1 flecs::entity (as ClassFactory does on Load_Game).
 		BuildingClass loaded_b(&derrick, &player, 88);
 		loaded_b.HasOpened = true;
-		loaded_b.IsInLimbo = false;
+		loaded_b.Unlimbo();
 
 		MemorySaveStream reader(false);
 		reader.Buffer = writer.Buffer;
-		auto resolve_owner = [&](EC::RootKind kind, std::uint32_t id) -> void * {
+		auto resolve_owner = [&](EC::RootKind kind, std::uint32_t id) -> flecs::entity {
 			if (kind == EC::RootKind::Object && id == 88u) {
-				return &loaded_b;
+				return loaded_b.Entity;
 			}
-			return nullptr;
+			return flecs::entity::null();
 		};
 		bool const load_ok = EC::GameComponents::Load_Trailer(EC::World(), reader, resolve_owner);
 
 		CRCEngine obj_crc_after;
-		loaded_b.Components.Compute_CRC(obj_crc_after);
-		int const single_crc_after = EC::Single_Component_CRC(loaded_b.Components.Get<EC::ProduceCashComponent>());
+		EC::GameComponents::Compute_Entity_CRC(loaded_b.Entity, obj_crc_after);
+		int const single_crc_after = EC::Single_Component_CRC(loaded_b.Entity.get<EC::ProduceCashComponent>());
 
 		CRCEngine world_crc_after;
 		EC::GameComponents::Compute_CRC_All(EC::World(), world_crc_after, owner_key_fn);
 
-		auto const & restored = loaded_b.Components.Get<EC::ProduceCashComponent>();
+		auto const & restored = loaded_b.Entity.get<EC::ProduceCashComponent>();
 		bool const state_restored =
 			save_ok && load_ok &&
 			restored.Timer.Value() == saved_ticks_left &&
 			restored.Remaining == 250 &&
 			restored.IsStartupPaid &&
 			single_crc_before == single_crc_after &&
-			obj_crc_before() == obj_crc_after() &&
-			world_crc_before() == world_crc_after();
+			obj_crc_val_before == obj_crc_after() &&
+			world_crc_val_before == world_crc_after();
 
 		// Resume power and verify restored countdown fires on exact remaining frame
 		// (1 frame for Start() to anchor Started = Frame + saved_ticks_left frames = 6 frames)
@@ -759,7 +782,7 @@ int main(void)
 		bool const pre_fire_ok = (player.Credits == 500);
 		Advance_Frames(1);
 		bool const post_fire_ok = (player.Credits == 600 &&
-			loaded_b.Components.Get<EC::ProduceCashComponent>().Remaining == 150);
+			loaded_b.Entity.get<EC::ProduceCashComponent>().Remaining == 150);
 
 		Do_Capture(loaded_b, &neutral);
 		Do_Capture(loaded_b, &player);

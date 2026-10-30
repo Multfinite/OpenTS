@@ -9,9 +9,6 @@
 
 #pragma once
 
-// Internal header confined to code/ec/ and translation units that include
-// code/ec/entity_inl.h. Exposes the underlying flecs::world storage instance.
-
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
@@ -21,24 +18,22 @@
 
 #include <flecs.h>
 
-#include <cstddef>
-
 namespace EC {
 
-// Accesses the active flecs::world storage, lazily constructing it on first call.
+using WorldInitCallback = void (*)(flecs::world &);
+
+// Accesses the active flecs::world storage, constructing it on first call.
 flecs::world & World(void) noexcept;
 
 // Returns true when an active flecs::world currently exists and has not been torn down.
 bool Is_World_Alive(void) noexcept;
 
-//Recreates a clean flecs::world (used on Clear_Scenario and before loading a save).
-void World_Reset(void) noexcept;
+// Registers the component-registration callback invoked whenever a flecs::world
+// is created (and immediately if World() is already alive).
+void Set_World_Init_Hook(WorldInitCallback callback) noexcept;
 
-// Destroys the flecs::world at engine shutdown; subsequent Destroy_Entity_Handle
-// calls from late static destructors safely become no-ops.
+// Destroys the flecs::world at engine shutdown; subsequent Destroy_Entity calls
+// from late static destructors (such as BlubCell) safely become no-ops.
 void World_Shutdown(void) noexcept;
-
-// Number of currently materialized entities across ObjectClass, CellClass, and LocomotionClass.
-std::size_t Live_Entity_Count(void) noexcept;
 
 } // namespace EC

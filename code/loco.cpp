@@ -42,10 +42,10 @@
 /// <remarks>Link_To_Object must be called before the locomotor can be asked to do anything
 /// useful.</remarks>
 LocomotionClass::LocomotionClass(void) :
+	Entity(EC::Create_Entity(this)),
 	LinkedTo(NULL),
 	IsPowered(true),
-	Dirty(true),
-	CompHolder(this)
+	Dirty(true)
 {
 }
 
@@ -55,7 +55,7 @@ LocomotionClass::LocomotionClass(void) :
 /// </summary>
 LocomotionClass::~LocomotionClass(void)
 {
-	CompHolder.Reset();
+	EC::Destroy_Entity(Entity);
 	LinkedTo = NULL;
 }
 
@@ -70,7 +70,11 @@ void LocomotionClass::Link_To_Object(void *pointer)
 {
 	LinkedTo = (FootClass *)pointer;
 	if (LinkedTo != NULL) {
-		CompHolder.Set_Disabled(LinkedTo->IsInLimbo);
+		if (LinkedTo->IsInLimbo) {
+			Entity.add(flecs::Disabled);
+		} else {
+			Entity.remove(flecs::Disabled);
+		}
 	}
 	EC::Hooks::On_Link_To_Object(*this, LinkedTo);
 }

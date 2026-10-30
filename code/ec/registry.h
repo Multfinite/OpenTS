@@ -9,47 +9,87 @@
 
 #pragma once
 
-// Recursive C++20 ComponentRegistry<Ts...> generating zero-overhead static
-// dispatch across dense flecs tables for all 12 global hooks (G01..G12) and
-// 27 entity/component hooks (E01..E27), plus the two-subpass EC01 .SAV trailer
-// and 4-level Compute_CRC audit.
+// Compile-time recursive ComponentRegistry<Ts...> over native flecs storage:
+// - Native flecs component registration with .on_add / .on_remove observers
+// - Persistent cached flecs::query<> passes stored on flecs::world
+// - Direct flecs::entity event dispatchers (zero lazy-creation machinery)
+// - Two-subpass EC01 .SAV trailer (queries only serializable component tables)
+// - 4-level deterministic Compute_CRC over flecs::entity handles
 
 #include "crc.h"
 #include "ec/concepts.h"
 #include "ec/entity.h"
-#include "ec/entity_inl.h"
 #include "ec/fnv1a.h"
 #include "ec/game_components.h"
 #include "ec/world.h"
 
 #include <algorithm>
+#include <cassert>
+#include <cstdint>
 #include <cstdio>
 #include <string>
+#include <string_view>
 #include <tuple>
-#include <type_traits>
 #include <utility>
 #include <vector>
 
 namespace EC {
 
-inline constexpr std::uint32_t EC_TRAILER_MAGIC = 0x31304345u; // 'EC01'
+inline constexpr std::uint32_t EC_TRAILER_MAGIC = 0x31304345u; // 'EC01' little-endian
 inline constexpr std::uint32_t EC_TRAILER_VERSION = 1u;
+
+// ---------------------------------------------------------------------------
+// Standalone Per-Component CRC Helpers (Level 1a & Level 1b)
+// ---------------------------------------------------------------------------
+
+template<HasComputeCRCPlain C>
+int Single_Component_CRC(C const & comp, int seed = 0)
+{
+	CRCEngine crc(seed);
+	crc(static_cast<int>(Component_Type_Tag_32<C>()));
+	comp.Compute_CRC(crc);
+	return crc();
+}
+
+template<typename C, typename OwnerT>
+requires (
+	(EntityRoot<OwnerT> && HasComputeCRCRoot<C, OwnerT>) ||
+	(HasDerivedObjectOwner<C> && std::same_as<OwnerT, typename C::OwnerType> && HasComputeCRCDerivedOwner<C>)
+)
+int Single_Component_CRC(C const & comp, OwnerT const & owner, int seed = 0)
+{
+	CRCEngine crc(seed);
+	crc(static_cast<int>(Component_Type_Tag_32<C>()));
+	comp.Compute_CRC(crc, owner);
+	return crc();
+}
 
 namespace Detail {
 
-template<typename OwnerT>
-decltype(auto) Holder_Of(OwnerT & owner) noexcept
+struct SavedEntityManifest
 {
-	if constexpr (requires { owner.Components(); }) {
-		return owner.Components();
-	} else {
-		return (owner.Components);
-	}
-}
+	flecs::entity_t FlecsId = 0;
+	std::uint8_t Root = 0;
+	std::uint8_t Flags = 0; // bit 0: flecs::Disabled
+	std::uint32_t OwnerSwizzleId = 0;
+	std::vector<std::uint64_t> TypeIds;
+};
 
-inline char const * Root_Short_Label(std::uint8_t root) noexcept
+struct LoadedEntityManifest
 {
-	switch (static_cast<RootKind>(root)) {
+	flecs::entity Entity;
+	std::vector<std::uint64_t> TypeIds;
+};
+
+struct ComponentCrcRow
+{
+	StableOwnerKey Key{};
+	int SingleCrc = 0;
+};
+
+inline char const * Root_Short_Label(std::uint8_t kind) noexcept
+{
+	switch (static_cast<RootKind>(kind)) {
 		case RootKind::Object: return "Obj";
 		case RootKind::Cell: return "Cell";
 		case RootKind::Locomotor: return "Loco";
@@ -57,29 +97,8 @@ inline char const * Root_Short_Label(std::uint8_t root) noexcept
 	return "Unk";
 }
 
-struct SavedEntityManifest
-{
-	std::uint64_t FlecsId = 0;
-	std::uint8_t Root = 0;
-	std::uint8_t Flags = 0;
-	std::uint32_t OwnerSwizzleId = 0;
-	std::vector<std::uint64_t> TypeIds;
-};
-
-struct LoadedEntityManifest
-{
-	std::uint64_t FlecsId = 0;
-	std::vector<std::uint64_t> TypeIds;
-};
-
-struct ComponentCrcRow
-{
-	StableOwnerKey Key;
-	int SingleCrc = 0;
-};
-
 template<typename OwnerKeyFn>
-bool Resolve_Entity_Owner_Key(flecs::entity fe, OwnerKeyFn && owner_key_fn, StableOwnerKey & out_key)
+inline bool Resolve_Entity_Owner_Key(flecs::entity fe, OwnerKeyFn & owner_key_fn, StableOwnerKey & out_key)
 {
 	if (auto const * obj = fe.try_get<OwnerLink<ObjectClass>>(); obj != nullptr && obj->ptr != nullptr) {
 		out_key = owner_key_fn(RootKind::Object, obj->ptr);
@@ -96,73 +115,214 @@ bool Resolve_Entity_Owner_Key(flecs::entity fe, OwnerKeyFn && owner_key_fn, Stab
 	return false;
 }
 
-template<typename IdOfFn>
-bool Resolve_Entity_Save_Owner(flecs::entity fe, IdOfFn && id_of, std::uint8_t & out_root, std::uint32_t & out_swizzle)
+inline bool Resolve_Entity_Root_Ptr(flecs::entity fe, RootKind & out_kind, void const *& out_ptr) noexcept
 {
 	if (auto const * obj = fe.try_get<OwnerLink<ObjectClass>>(); obj != nullptr && obj->ptr != nullptr) {
-		out_root = static_cast<std::uint8_t>(RootKind::Object);
-		out_swizzle = static_cast<std::uint32_t>(id_of(RootKind::Object, obj->ptr));
-		return out_swizzle != 0;
+		out_kind = RootKind::Object;
+		out_ptr = obj->ptr;
+		return true;
 	}
 	if (auto const * cell = fe.try_get<OwnerLink<CellClass>>(); cell != nullptr && cell->ptr != nullptr) {
-		out_root = static_cast<std::uint8_t>(RootKind::Cell);
-		out_swizzle = static_cast<std::uint32_t>(id_of(RootKind::Cell, cell->ptr));
-		return out_swizzle != 0;
+		out_kind = RootKind::Cell;
+		out_ptr = cell->ptr;
+		return true;
 	}
 	if (auto const * loco = fe.try_get<OwnerLink<LocomotionClass>>(); loco != nullptr && loco->ptr != nullptr) {
-		out_root = static_cast<std::uint8_t>(RootKind::Locomotor);
-		out_swizzle = static_cast<std::uint32_t>(id_of(RootKind::Locomotor, loco->ptr));
-		return out_swizzle != 0;
+		out_kind = RootKind::Locomotor;
+		out_ptr = loco->ptr;
+		return true;
 	}
 	return false;
 }
 
-template<typename ObjT = ObjectClass, typename CellT = CellClass, typename LocoT = LocomotionClass>
-inline std::uint64_t Materialize_Loaded_Owner(RootKind kind, void * owner_ptr, bool disabled) noexcept
+template<typename C>
+inline void Assert_Component_Root_Affinity(flecs::entity fe) noexcept
 {
-	if (owner_ptr == nullptr) {
-		return 0;
+#ifndef NDEBUG
+	if (fe.has<OwnerLink<ObjectClass>>()) {
+		assert((AllowedOnRoot<C, ObjectClass>));
+	} else if (fe.has<OwnerLink<CellClass>>()) {
+		assert((AllowedOnRoot<C, CellClass>));
+	} else if (fe.has<OwnerLink<LocomotionClass>>()) {
+		assert((AllowedOnRoot<C, LocomotionClass>));
 	}
-	switch (kind) {
-		case RootKind::Object: {
-			auto & holder = Holder_Of(*static_cast<ObjT *>(owner_ptr));
-			holder.Set_Disabled(disabled);
-			return holder.Ensure_Materialized();
-		}
-		case RootKind::Cell: {
-			auto & holder = Holder_Of(*static_cast<CellT *>(owner_ptr));
-			holder.Set_Disabled(disabled);
-			return holder.Ensure_Materialized();
-		}
-		case RootKind::Locomotor: {
-			auto & holder = Holder_Of(*static_cast<LocoT *>(owner_ptr));
-			holder.Set_Disabled(disabled);
-			return holder.Ensure_Materialized();
-		}
-	}
-	return 0;
+#else
+	(void)fe;
+#endif
 }
+
+template<typename C>
+inline void Invoke_Native_On_Add(flecs::entity fe, C & comp)
+{
+	Assert_Component_Root_Affinity<C>(fe);
+
+	if constexpr (OnAddDerivedOwner<C>) {
+		if (auto const * link = fe.try_get<OwnerLink<ObjectClass>>(); link != nullptr && link->ptr != nullptr) {
+			comp.On_Add(static_cast<typename C::OwnerType &>(*link->ptr));
+		}
+	} else if constexpr (OnAddRoot<C, ObjectClass>) {
+		if (auto const * link = fe.try_get<OwnerLink<ObjectClass>>(); link != nullptr && link->ptr != nullptr) {
+			comp.On_Add(*link->ptr);
+		}
+	} else if constexpr (OnAddRoot<C, CellClass>) {
+		if (auto const * link = fe.try_get<OwnerLink<CellClass>>(); link != nullptr && link->ptr != nullptr) {
+			comp.On_Add(*link->ptr);
+		}
+	} else if constexpr (OnAddRoot<C, LocomotionClass>) {
+		if (auto const * link = fe.try_get<OwnerLink<LocomotionClass>>(); link != nullptr && link->ptr != nullptr) {
+			comp.On_Add(*link->ptr);
+		}
+	} else if constexpr (OnAddEntity<C>) {
+		comp.On_Add(fe);
+	} else if constexpr (OnAddVoid<C>) {
+		comp.On_Add();
+	} else if constexpr (OnAttachDerivedOwner<C>) {
+		if (auto const * link = fe.try_get<OwnerLink<ObjectClass>>(); link != nullptr && link->ptr != nullptr) {
+			comp.On_Attach(static_cast<typename C::OwnerType &>(*link->ptr));
+		}
+	} else if constexpr (OnAttachRoot<C, ObjectClass>) {
+		if (auto const * link = fe.try_get<OwnerLink<ObjectClass>>(); link != nullptr && link->ptr != nullptr) {
+			comp.On_Attach(*link->ptr);
+		}
+	} else if constexpr (OnAttachRoot<C, CellClass>) {
+		if (auto const * link = fe.try_get<OwnerLink<CellClass>>(); link != nullptr && link->ptr != nullptr) {
+			comp.On_Attach(*link->ptr);
+		}
+	} else if constexpr (OnAttachRoot<C, LocomotionClass>) {
+		if (auto const * link = fe.try_get<OwnerLink<LocomotionClass>>(); link != nullptr && link->ptr != nullptr) {
+			comp.On_Attach(*link->ptr);
+		}
+	} else if constexpr (OnAttachEntity<C>) {
+		comp.On_Attach(fe);
+	} else if constexpr (OnAttachVoid<C>) {
+		comp.On_Attach();
+	}
+	(void)comp;
+}
+
+template<typename C>
+inline void Invoke_Native_On_Remove(flecs::entity fe, C & comp)
+{
+	if constexpr (OnRemoveDerivedOwner<C>) {
+		if (auto const * link = fe.try_get<OwnerLink<ObjectClass>>(); link != nullptr && link->ptr != nullptr) {
+			comp.On_Remove(static_cast<typename C::OwnerType &>(*link->ptr));
+		}
+	} else if constexpr (OnRemoveRoot<C, ObjectClass>) {
+		if (auto const * link = fe.try_get<OwnerLink<ObjectClass>>(); link != nullptr && link->ptr != nullptr) {
+			comp.On_Remove(*link->ptr);
+		}
+	} else if constexpr (OnRemoveRoot<C, CellClass>) {
+		if (auto const * link = fe.try_get<OwnerLink<CellClass>>(); link != nullptr && link->ptr != nullptr) {
+			comp.On_Remove(*link->ptr);
+		}
+	} else if constexpr (OnRemoveRoot<C, LocomotionClass>) {
+		if (auto const * link = fe.try_get<OwnerLink<LocomotionClass>>(); link != nullptr && link->ptr != nullptr) {
+			comp.On_Remove(*link->ptr);
+		}
+	} else if constexpr (OnRemoveEntity<C>) {
+		comp.On_Remove(fe);
+	} else if constexpr (OnRemoveVoid<C>) {
+		comp.On_Remove();
+	}
+	(void)comp;
+}
+
+template<typename C>
+inline void Feed_Component_CRC(C const & comp, flecs::entity fe, CRCEngine & crc)
+{
+	crc(static_cast<int>(Component_Type_Tag_32<C>()));
+	if constexpr (HasComputeCRCPlain<C>) {
+		comp.Compute_CRC(crc);
+		(void)fe;
+	} else if constexpr (HasComputeCRCEntity<C>) {
+		comp.Compute_CRC(crc, fe);
+	} else {
+		if constexpr (HasComputeCRCRoot<C, ObjectClass>) {
+			if (auto const * link = fe.try_get<OwnerLink<ObjectClass>>(); link != nullptr && link->ptr != nullptr) {
+				comp.Compute_CRC(crc, *link->ptr);
+			}
+		} else if constexpr (HasComputeCRCDerivedOwner<C>) {
+			if (auto const * link = fe.try_get<OwnerLink<ObjectClass>>(); link != nullptr && link->ptr != nullptr) {
+				comp.Compute_CRC(crc, static_cast<typename C::OwnerType const &>(*link->ptr));
+			}
+		}
+		if constexpr (HasComputeCRCRoot<C, CellClass>) {
+			if (auto const * link = fe.try_get<OwnerLink<CellClass>>(); link != nullptr && link->ptr != nullptr) {
+				comp.Compute_CRC(crc, *link->ptr);
+			}
+		}
+		if constexpr (HasComputeCRCRoot<C, LocomotionClass>) {
+			if (auto const * link = fe.try_get<OwnerLink<LocomotionClass>>(); link != nullptr && link->ptr != nullptr) {
+				comp.Compute_CRC(crc, *link->ptr);
+			}
+		}
+	}
+}
+
+// Persistent cached flecs::query<> stored directly as a singleton on flecs::world
+// so query cache lifetime matches the world with zero global state.
+template<typename PassTag, typename... QueryTerms>
+struct WorldCachedQuery
+{
+	flecs::query<QueryTerms...> Query;
+};
+
+template<typename PassTag, ecs_flags32_t ExtraFlags, typename... QueryTerms>
+inline flecs::query<QueryTerms...> const & Get_Cached_Query(flecs::world & world)
+{
+	using SlotT = WorldCachedQuery<PassTag, QueryTerms...>;
+	SlotT & slot = world.ensure<SlotT>();
+	if (!slot.Query) {
+		slot.Query = world.query_builder<QueryTerms...>().cached().query_flags(ExtraFlags).build();
+	}
+	return slot.Query;
+}
+
+struct PassTagAI {};
+struct PassTagPostAI {};
+struct PassTagEnvAI {};
+struct PassTagFrameBegin {};
+struct PassTagFrameEnd {};
+struct PassTagPreRender {};
+struct PassTagPostRender {};
+struct PassTagScenarioInit {};
+struct PassTagPostLoad {};
 
 } // namespace Detail
 
+template<HasComputeCRC C>
+bool Compute_Component_CRC(flecs::entity fe, CRCEngine & crc)
+{
+	if (fe.id() == 0 || !fe.is_alive()) {
+		return false;
+	}
+	C const * comp = fe.try_get<C>();
+	if (comp == nullptr) {
+		return false;
+	}
+	Detail::Feed_Component_CRC(*comp, fe, crc);
+	return true;
+}
+
 // ===========================================================================
-// Base Case: ComponentRegistry<> (Zero Registered Components)
+// Base Case: ComponentRegistry<> (Empty Pack)
 // ===========================================================================
+
+template<typename... Ts>
+struct ComponentRegistry;
 
 template<>
 struct ComponentRegistry<>
 {
 	static constexpr std::size_t count = 0;
 
-	template<typename>
+	template<typename C>
 	static constexpr bool contains = false;
 
-	template<std::uint64_t>
-	static constexpr bool contains_save_id = false;
+	static constexpr bool has_save_id(std::uint64_t) noexcept { return false; }
 
 	static void Register_All(flecs::world &) noexcept {}
 
-	// Global hooks G01..G09, G11
 	static void AI_All(flecs::world &) noexcept {}
 	static void PostAI_All(flecs::world &) noexcept {}
 	static void Environment_AI_All(flecs::world &) noexcept {}
@@ -174,38 +334,35 @@ struct ComponentRegistry<>
 	static void Scenario_Clear_All(void) noexcept {}
 	static void Post_Load_All(flecs::world &) noexcept {}
 
-	// Save helpers
 	template<typename StreamT>
 	static constexpr std::uint32_t Count_Serializable_Types(void) noexcept { return 0; }
-
 	template<typename StreamT>
-	static void Write_Type_Directory(StreamT &) {}
-
+	static void Write_Type_Directory(StreamT &) noexcept {}
+	template<typename StreamT, typename RecordFn>
+	static void Collect_Serializable_Entities(flecs::world &, RecordFn &&) noexcept {}
 	template<typename StreamT>
-	static void Append_Entity_Save_Types(flecs::entity, std::vector<std::uint64_t> &) {}
-
+	static bool Write_Component_By_Save_Id(flecs::entity, std::uint64_t, StreamT &) noexcept { return false; }
 	template<typename StreamT>
-	static bool Write_Component_By_Save_Id(flecs::entity, std::uint64_t, StreamT &) { return false; }
-
+	static bool Ensure_Component_By_Save_Id(flecs::entity, std::uint64_t) noexcept { return false; }
 	template<typename StreamT>
-	static bool Ensure_Component_By_Save_Id(flecs::entity, std::uint64_t) { return false; }
-
-	template<typename StreamT>
-	static bool Read_Component_By_Save_Id(flecs::entity, std::uint64_t, StreamT &) { return false; }
+	static bool Read_Component_By_Save_Id(flecs::entity, std::uint64_t, StreamT &) noexcept { return false; }
 
 	template<typename StreamT, typename IdOfFn>
-	static bool Save_Trailer(flecs::world &, StreamT & stream, IdOfFn &&)
+	static bool Save_Trailer(flecs::world & world, StreamT & stream, IdOfFn && id_of)
 	{
+		(void)world;
+		(void)id_of;
 		return !stream.Was_Error();
 	}
 
 	template<typename StreamT, typename ResolveOwnerFn>
-	static bool Load_Trailer(flecs::world &, StreamT & stream, ResolveOwnerFn &&)
+	static bool Load_Trailer(flecs::world & world, StreamT & stream, ResolveOwnerFn && resolve_owner)
 	{
+		(void)world;
+		(void)resolve_owner;
 		if (stream.Offset() >= stream.Size()) {
-			return !stream.Was_Error();
+			return true;
 		}
-		// Consume an EC01 trailer gracefully even if this build defines 0 components.
 		std::uint32_t magic = 0;
 		std::uint32_t version = 0;
 		std::uint32_t payload_bytes = 0;
@@ -216,25 +373,21 @@ struct ComponentRegistry<>
 			stream.Fail();
 			return false;
 		}
-		typename StreamT::BoundScope scope(stream, stream.Offset() + payload_bytes);
-		std::vector<unsigned char> skip(payload_bytes);
+		if (!stream.Fits(static_cast<int>(payload_bytes), 1)) {
+			return false;
+		}
+		std::vector<unsigned char> discard(payload_bytes);
 		if (payload_bytes > 0) {
-			stream.Serialize_Bytes(skip.data(), static_cast<int>(payload_bytes));
+			stream.Serialize_Bytes(discard.data(), static_cast<int>(payload_bytes));
 		}
 		return !stream.Was_Error();
 	}
 
-	// CRC hooks G12 / E27
-	template<typename C, EntityRoot Root>
-	static bool Compute_Entity_Component_CRC(TypedEntity<Root> const & holder, CRCEngine & crc)
-	{
-		return holder.template Compute_CRC_Of<C>(crc);
-	}
-
 	static void Compute_Flecs_Entity_CRC(flecs::entity, CRCEngine &) noexcept {}
+	static void Compute_Entity_CRC(flecs::entity, CRCEngine &) noexcept {}
 
-	template<EntityRoot Root>
-	static void Compute_Entity_CRC(TypedEntity<Root> const &, CRCEngine &) noexcept {}
+	template<typename C>
+	static bool Compute_Entity_Component_CRC(flecs::entity, CRCEngine &) noexcept { return false; }
 
 	template<typename OwnerKeyFn>
 	static void Compute_CRC_All(flecs::world &, CRCEngine &, OwnerKeyFn &&) noexcept {}
@@ -245,7 +398,6 @@ struct ComponentRegistry<>
 	template<typename OwnerKeyFn>
 	static void Print_Component_CRCs(flecs::world &, FILE *, OwnerKeyFn &&) noexcept {}
 
-	// Entity hooks E02..E26
 	template<typename OwnerT>
 	static void Dispatch_Detach(OwnerT &, AbstractClass const *, bool) noexcept {}
 	template<typename OwnerT>
@@ -336,15 +488,25 @@ struct ComponentRegistry<>
 	static void Dispatch_Begin_Piggyback(OwnerT &, CarriedIface * carried) noexcept
 	{
 		if (carried != nullptr) {
-			Detail::Holder_Of(*carried).Set_Disabled(true);
+			flecs::entity ce = Entity_Of(*carried);
+			if (ce.id() != 0) {
+				ce.add(flecs::Disabled);
+			}
 		}
 	}
 	template<typename OwnerT, typename CarriedIface>
 	static void Dispatch_End_Piggyback(OwnerT & carrier, CarriedIface * restored) noexcept
 	{
 		if (restored != nullptr) {
-			bool const carrier_disabled = Detail::Holder_Of(carrier).Is_Disabled();
-			Detail::Holder_Of(*restored).Set_Disabled(carrier_disabled);
+			flecs::entity ce = Entity_Of(*restored);
+			flecs::entity carrier_e = Entity_Of(carrier);
+			if (ce.id() != 0) {
+				if (carrier_e.id() != 0 && carrier_e.has(flecs::Disabled)) {
+					ce.add(flecs::Disabled);
+				} else {
+					ce.remove(flecs::Disabled);
+				}
+			}
 		}
 	}
 	template<typename OwnerT, typename... Args>
@@ -362,60 +524,84 @@ struct ComponentRegistry<Head, Tail...>
 
 	static constexpr std::size_t count = 1 + Next::count;
 
+	template<typename C>
+	static constexpr bool contains = std::same_as<C, Head> || Next::template contains<C>;
+
 	static_assert(!Next::template contains<Head>,
 		"Duplicate component type registered in EC::ComponentRegistry.");
-	static_assert(Component_Save_Id<Head>() == 0ULL || !Next::template contains_save_id<Component_Save_Id<Head>()>,
-		"Hash collision or duplicate SaveName detected in EC::ComponentRegistry.");
 
-	template<typename T>
-	static constexpr bool contains = std::same_as<T, Head> || Next::template contains<T>;
+	static constexpr bool has_save_id(std::uint64_t id) noexcept
+	{
+		if constexpr (HasSaveName<Head>) {
+			if (Component_Save_Id<Head>() == id) {
+				return true;
+			}
+		}
+		return Next::has_save_id(id);
+	}
 
-	template<std::uint64_t SaveId>
-	static constexpr bool contains_save_id =
-		(SaveId != 0ULL && Component_Save_Id<Head>() == SaveId) || Next::template contains_save_id<SaveId>;
+	static_assert(!HasSaveName<Head> || !Next::has_save_id(Component_Save_Id<Head>()),
+		"FNV-1a SaveName collision across registered components in EC::ComponentRegistry.");
 
+	// Native flecs component registration + .on_add / .on_remove observers
 	static void Register_All(flecs::world & world)
 	{
-		world.component<Head>();
+		auto comp = world.component<Head>();
+
+#ifndef NDEBUG
+		constexpr bool needs_add_hook = true;
+#else
+		constexpr bool needs_add_hook = HasOnAdd<Head> || HasOnAttach<Head>;
+#endif
+		if constexpr (needs_add_hook) {
+			comp.on_add([](flecs::entity fe, Head & c) {
+				Detail::Invoke_Native_On_Add<Head>(fe, c);
+			});
+		}
+		if constexpr (HasOnRemove<Head>) {
+			comp.on_remove([](flecs::entity fe, Head & c) {
+				Detail::Invoke_Native_On_Remove<Head>(fe, c);
+			});
+		}
+
 		Next::Register_All(world);
 	}
 
 	// -----------------------------------------------------------------------
-	// Global Dense Table Iteration Helpers (Zero Queries for Passive Types)
+	// Global Frame, Simulation, Render, and Lifecycle Passes (G01..G08, G11)
+	// Backed by persistent cached flecs::query<> instances on flecs::world.
 	// -----------------------------------------------------------------------
 
-#define OPENTS_EC_IMPL_MUT_GLOBAL_PASS(PassName, ConceptPrefix, MethodName, ExtraQueryFlags) \
+#define OPENTS_EC_IMPL_MUT_GLOBAL_PASS(PassName, TagType, ConceptPrefix, MethodName, ExtraQueryFlags) \
 	static void PassName(flecs::world & world) \
 	{ \
 		if constexpr (ConceptPrefix##Void<Head>) { \
-			world.query_builder<Head>().query_flags(ExtraQueryFlags).each([](Head & comp) { \
-				comp.MethodName(); \
-			}); \
-		} else if constexpr (ConceptPrefix##View<Head>) { \
-			world.query_builder<Head>().query_flags(ExtraQueryFlags).each([](flecs::entity fe, Head & comp) { \
-				comp.MethodName(EntityView(static_cast<std::uint64_t>(fe.id()))); \
-			}); \
+			Detail::Get_Cached_Query<TagType, ExtraQueryFlags, Head>(world).each( \
+				[](Head & comp) { comp.MethodName(); }); \
+		} else if constexpr (ConceptPrefix##Entity<Head>) { \
+			Detail::Get_Cached_Query<TagType, ExtraQueryFlags, Head>(world).each( \
+				[](flecs::entity fe, Head & comp) { comp.MethodName(fe); }); \
 		} else if constexpr (ConceptPrefix##DerivedOwner<Head>) { \
 			using SubOwnerT = typename Head::OwnerType; \
-			world.query_builder<OwnerLink<ObjectClass> const, Head>().query_flags(ExtraQueryFlags).each( \
+			Detail::Get_Cached_Query<TagType, ExtraQueryFlags, OwnerLink<ObjectClass> const, Head>(world).each( \
 				[](OwnerLink<ObjectClass> const & link, Head & comp) { \
 					if (link.ptr != nullptr) comp.MethodName(static_cast<SubOwnerT &>(*link.ptr)); \
 				}); \
 		} else { \
 			if constexpr (ConceptPrefix##Root<Head, ObjectClass>) { \
-				world.query_builder<OwnerLink<ObjectClass> const, Head>().query_flags(ExtraQueryFlags).each( \
+				Detail::Get_Cached_Query<TagType, ExtraQueryFlags, OwnerLink<ObjectClass> const, Head>(world).each( \
 					[](OwnerLink<ObjectClass> const & link, Head & comp) { \
 						if (link.ptr != nullptr) comp.MethodName(*link.ptr); \
 					}); \
 			} \
 			if constexpr (ConceptPrefix##Root<Head, CellClass>) { \
-				world.query_builder<OwnerLink<CellClass> const, Head>().query_flags(ExtraQueryFlags).each( \
+				Detail::Get_Cached_Query<TagType, ExtraQueryFlags, OwnerLink<CellClass> const, Head>(world).each( \
 					[](OwnerLink<CellClass> const & link, Head & comp) { \
 						if (link.ptr != nullptr) comp.MethodName(*link.ptr); \
 					}); \
 			} \
 			if constexpr (ConceptPrefix##Root<Head, LocomotionClass>) { \
-				world.query_builder<OwnerLink<LocomotionClass> const, Head>().query_flags(ExtraQueryFlags).each( \
+				Detail::Get_Cached_Query<TagType, ExtraQueryFlags, OwnerLink<LocomotionClass> const, Head>(world).each( \
 					[](OwnerLink<LocomotionClass> const & link, Head & comp) { \
 						if (link.ptr != nullptr) comp.MethodName(*link.ptr); \
 					}); \
@@ -424,38 +610,36 @@ struct ComponentRegistry<Head, Tail...>
 		Next::PassName(world); \
 	}
 
-#define OPENTS_EC_IMPL_CONST_GLOBAL_PASS(PassName, ConceptPrefix, MethodName) \
+#define OPENTS_EC_IMPL_CONST_GLOBAL_PASS(PassName, TagType, ConceptPrefix, MethodName) \
 	static void PassName(flecs::world & world) \
 	{ \
 		if constexpr (ConceptPrefix##Void<Head>) { \
-			world.query_builder<Head const>().each([](Head const & comp) { \
-				comp.MethodName(); \
-			}); \
-		} else if constexpr (ConceptPrefix##View<Head>) { \
-			world.query_builder<Head const>().each([](flecs::entity fe, Head const & comp) { \
-				comp.MethodName(EntityView(static_cast<std::uint64_t>(fe.id()))); \
-			}); \
+			Detail::Get_Cached_Query<TagType, 0, Head const>(world).each( \
+				[](Head const & comp) { comp.MethodName(); }); \
+		} else if constexpr (ConceptPrefix##Entity<Head>) { \
+			Detail::Get_Cached_Query<TagType, 0, Head const>(world).each( \
+				[](flecs::entity fe, Head const & comp) { comp.MethodName(fe); }); \
 		} else if constexpr (ConceptPrefix##DerivedOwner<Head>) { \
 			using SubOwnerT = typename Head::OwnerType; \
-			world.query_builder<OwnerLink<ObjectClass> const, Head const>().each( \
+			Detail::Get_Cached_Query<TagType, 0, OwnerLink<ObjectClass> const, Head const>(world).each( \
 				[](OwnerLink<ObjectClass> const & link, Head const & comp) { \
 					if (link.ptr != nullptr) comp.MethodName(static_cast<SubOwnerT const &>(*link.ptr)); \
 				}); \
 		} else { \
 			if constexpr (ConceptPrefix##Root<Head, ObjectClass>) { \
-				world.query_builder<OwnerLink<ObjectClass> const, Head const>().each( \
+				Detail::Get_Cached_Query<TagType, 0, OwnerLink<ObjectClass> const, Head const>(world).each( \
 					[](OwnerLink<ObjectClass> const & link, Head const & comp) { \
 						if (link.ptr != nullptr) comp.MethodName(*link.ptr); \
 					}); \
 			} \
 			if constexpr (ConceptPrefix##Root<Head, CellClass>) { \
-				world.query_builder<OwnerLink<CellClass> const, Head const>().each( \
+				Detail::Get_Cached_Query<TagType, 0, OwnerLink<CellClass> const, Head const>(world).each( \
 					[](OwnerLink<CellClass> const & link, Head const & comp) { \
 						if (link.ptr != nullptr) comp.MethodName(*link.ptr); \
 					}); \
 			} \
 			if constexpr (ConceptPrefix##Root<Head, LocomotionClass>) { \
-				world.query_builder<OwnerLink<LocomotionClass> const, Head const>().each( \
+				Detail::Get_Cached_Query<TagType, 0, OwnerLink<LocomotionClass> const, Head const>(world).each( \
 					[](OwnerLink<LocomotionClass> const & link, Head const & comp) { \
 						if (link.ptr != nullptr) comp.MethodName(*link.ptr); \
 					}); \
@@ -464,16 +648,16 @@ struct ComponentRegistry<Head, Tail...>
 		Next::PassName(world); \
 	}
 
-	OPENTS_EC_IMPL_MUT_GLOBAL_PASS(AI_All, AI, AI, 0)                                     // G01
-	OPENTS_EC_IMPL_MUT_GLOBAL_PASS(PostAI_All, PostAI, PostAI, 0)                         // G02
-	OPENTS_EC_IMPL_MUT_GLOBAL_PASS(Environment_AI_All, EnvironmentAI, Environment_AI, 0)  // G03
-	OPENTS_EC_IMPL_MUT_GLOBAL_PASS(Frame_Begin_All, FrameBegin, Frame_Begin, 0)           // G04
-	OPENTS_EC_IMPL_MUT_GLOBAL_PASS(Frame_End_All, FrameEnd, Frame_End, 0)                 // G05
-	OPENTS_EC_IMPL_CONST_GLOBAL_PASS(Pre_Render_All, PreRender, Pre_Render)               // G06
-	OPENTS_EC_IMPL_CONST_GLOBAL_PASS(Post_Render_All, PostRender, Post_Render)            // G07
-	OPENTS_EC_IMPL_MUT_GLOBAL_PASS(Scenario_Init_All, ScenarioInit, Scenario_Init, 0)     // G08
+	OPENTS_EC_IMPL_MUT_GLOBAL_PASS(AI_All, Detail::PassTagAI, AI, AI, 0)                                     // G01
+	OPENTS_EC_IMPL_MUT_GLOBAL_PASS(PostAI_All, Detail::PassTagPostAI, PostAI, PostAI, 0)                     // G02
+	OPENTS_EC_IMPL_MUT_GLOBAL_PASS(Environment_AI_All, Detail::PassTagEnvAI, EnvironmentAI, Environment_AI, 0)// G03
+	OPENTS_EC_IMPL_MUT_GLOBAL_PASS(Frame_Begin_All, Detail::PassTagFrameBegin, FrameBegin, Frame_Begin, 0)   // G04
+	OPENTS_EC_IMPL_MUT_GLOBAL_PASS(Frame_End_All, Detail::PassTagFrameEnd, FrameEnd, Frame_End, 0)           // G05
+	OPENTS_EC_IMPL_CONST_GLOBAL_PASS(Pre_Render_All, Detail::PassTagPreRender, PreRender, Pre_Render)        // G06
+	OPENTS_EC_IMPL_CONST_GLOBAL_PASS(Post_Render_All, Detail::PassTagPostRender, PostRender, Post_Render)    // G07
+	OPENTS_EC_IMPL_MUT_GLOBAL_PASS(Scenario_Init_All, Detail::PassTagScenarioInit, ScenarioInit, Scenario_Init, 0) // G08
 	// Post_Load runs across both enabled and disabled entities (e.g. units in Limbo / Piggybacker)
-	OPENTS_EC_IMPL_MUT_GLOBAL_PASS(Post_Load_All, PostLoad, Post_Load, EcsQueryMatchDisabled) // G11
+	OPENTS_EC_IMPL_MUT_GLOBAL_PASS(Post_Load_All, Detail::PassTagPostLoad, PostLoad, Post_Load, EcsQueryMatchDisabled) // G11
 
 #undef OPENTS_EC_IMPL_MUT_GLOBAL_PASS
 #undef OPENTS_EC_IMPL_CONST_GLOBAL_PASS
@@ -488,7 +672,7 @@ struct ComponentRegistry<Head, Tail...>
 	}
 
 	// -----------------------------------------------------------------------
-	// G10: Two-Subpass EC01 .SAV Trailer (Freeze Archetypes Before Swizzler!)
+	// G10: Two-Subpass EC01 .SAV Trailer (Queries Serializable Tables Only!)
 	// -----------------------------------------------------------------------
 
 	template<typename StreamT>
@@ -513,28 +697,30 @@ struct ComponentRegistry<Head, Tail...>
 		Next::template Write_Type_Directory<StreamT>(stream);
 	}
 
-	template<typename StreamT>
-	static void Append_Entity_Save_Types(flecs::entity fe, std::vector<std::uint64_t> & out_ids)
+	template<typename StreamT, typename RecordFn>
+	static void Collect_Serializable_Entities(flecs::world & world, RecordFn && record_fn)
 	{
 		if constexpr (HasSerialize<Head, StreamT>) {
-			if (fe.has<Head>()) {
-				out_ids.push_back(Component_Save_Id<Head>());
-			}
+			constexpr std::uint64_t save_id = Component_Save_Id<Head>();
+			world.query_builder<Head const>()
+				.query_flags(EcsQueryMatchDisabled)
+				.each([&](flecs::entity fe, Head const &) {
+					record_fn(fe, save_id);
+				});
 		}
-		Next::template Append_Entity_Save_Types<StreamT>(fe, out_ids);
+		Next::template Collect_Serializable_Entities<StreamT>(world, std::forward<RecordFn>(record_fn));
 	}
 
 	template<typename StreamT>
 	static bool Write_Component_By_Save_Id(flecs::entity fe, std::uint64_t save_id, StreamT & stream)
 	{
 		if constexpr (HasSerialize<Head, StreamT>) {
-			if (save_id == Component_Save_Id<Head>()) {
-				Head * comp = fe.try_get_mut<Head>();
-				if (comp == nullptr) {
-					return false;
+			if (Component_Save_Id<Head>() == save_id) {
+				if (Head * comp = fe.try_get_mut<Head>(); comp != nullptr) {
+					comp->Serialize(stream);
+					return true;
 				}
-				comp->Serialize(stream);
-				return !stream.Was_Error();
+				return false;
 			}
 		}
 		return Next::template Write_Component_By_Save_Id<StreamT>(fe, save_id, stream);
@@ -544,7 +730,7 @@ struct ComponentRegistry<Head, Tail...>
 	static bool Ensure_Component_By_Save_Id(flecs::entity fe, std::uint64_t save_id)
 	{
 		if constexpr (HasSerialize<Head, StreamT>) {
-			if (save_id == Component_Save_Id<Head>()) {
+			if (Component_Save_Id<Head>() == save_id) {
 				(void)fe.ensure<Head>();
 				return true;
 			}
@@ -556,13 +742,12 @@ struct ComponentRegistry<Head, Tail...>
 	static bool Read_Component_By_Save_Id(flecs::entity fe, std::uint64_t save_id, StreamT & stream)
 	{
 		if constexpr (HasSerialize<Head, StreamT>) {
-			if (save_id == Component_Save_Id<Head>()) {
-				Head * comp = fe.try_get_mut<Head>();
-				if (comp == nullptr) {
-					return false;
+			if (Component_Save_Id<Head>() == save_id) {
+				if (Head * comp = fe.try_get_mut<Head>(); comp != nullptr) {
+					comp->Serialize(stream);
+					return true;
 				}
-				comp->Serialize(stream);
-				return !stream.Was_Error();
+				return false;
 			}
 		}
 		return Next::template Read_Component_By_Save_Id<StreamT>(fe, save_id, stream);
@@ -571,36 +756,39 @@ struct ComponentRegistry<Head, Tail...>
 	template<typename StreamT, typename IdOfFn>
 	static bool Save_Trailer(flecs::world & world, StreamT & stream, IdOfFn && id_of)
 	{
-		if (Live_Entity_Count() == 0) {
-			return !stream.Was_Error();
-		}
-
 		std::vector<Detail::SavedEntityManifest> records;
-		auto collect_for_root = [&]<EntityRoot Root>(void) {
-			world.query_builder<OwnerLink<Root> const>()
-				.query_flags(EcsQueryMatchDisabled)
-				.each([&](flecs::entity fe, OwnerLink<Root> const & link) {
-					if (link.ptr == nullptr) {
-						return;
-					}
-					Detail::SavedEntityManifest rec;
-					rec.FlecsId = static_cast<std::uint64_t>(fe.id());
-					rec.Root = static_cast<std::uint8_t>(Root_Kind_Of<Root>());
-					rec.Flags = fe.has(flecs::Disabled) ? 1u : 0u;
-					rec.OwnerSwizzleId = static_cast<std::uint32_t>(id_of(Root_Kind_Of<Root>(), link.ptr));
-					if (rec.OwnerSwizzleId == 0) {
-						return;
-					}
-					Append_Entity_Save_Types<StreamT>(fe, rec.TypeIds);
-					if (!rec.TypeIds.empty() || rec.Flags != 0) {
-						records.push_back(std::move(rec));
-					}
-				});
+
+		auto find_or_add = [&](flecs::entity fe) -> Detail::SavedEntityManifest * {
+			flecs::entity_t const fid = fe.id();
+			for (Detail::SavedEntityManifest & existing : records) {
+				if (existing.FlecsId == fid) {
+					return &existing;
+				}
+			}
+			RootKind kind{};
+			void const * owner_ptr = nullptr;
+			if (!Detail::Resolve_Entity_Root_Ptr(fe, kind, owner_ptr)) {
+				return nullptr;
+			}
+			std::uint32_t const swizzle_id = static_cast<std::uint32_t>(id_of(kind, owner_ptr));
+			if (swizzle_id == 0) {
+				return nullptr;
+			}
+			Detail::SavedEntityManifest rec;
+			rec.FlecsId = fid;
+			rec.Root = static_cast<std::uint8_t>(kind);
+			rec.Flags = fe.has(flecs::Disabled) ? 1u : 0u;
+			rec.OwnerSwizzleId = swizzle_id;
+			records.push_back(std::move(rec));
+			return &records.back();
 		};
 
-		collect_for_root.template operator()<ObjectClass>();
-		collect_for_root.template operator()<CellClass>();
-		collect_for_root.template operator()<LocomotionClass>();
+		// Visit only entities carrying at least one serializable component (never scans plain cells/objects).
+		Collect_Serializable_Entities<StreamT>(world, [&](flecs::entity fe, std::uint64_t save_id) {
+			if (Detail::SavedEntityManifest * rec = find_or_add(fe); rec != nullptr) {
+				rec->TypeIds.push_back(save_id);
+			}
+		});
 
 		if (records.empty()) {
 			return !stream.Was_Error();
@@ -642,18 +830,15 @@ struct ComponentRegistry<Head, Tail...>
 			}
 		}
 
-		// Subpass 2: Framed component payload blobs
+		// Subpass 2: Component payloads (each framed with u32 byte length)
 		for (Detail::SavedEntityManifest const & rec : records) {
-			flecs::entity fe(world, static_cast<flecs::entity_t>(rec.FlecsId));
+			flecs::entity fe(world, rec.FlecsId);
 			for (std::uint64_t const tid : rec.TypeIds) {
 				unsigned int const blob_len_pos = stream.Offset();
 				std::uint32_t blob_bytes = 0;
 				stream.Serialize(blob_bytes);
 				unsigned int const blob_start = stream.Offset();
-				if (!Write_Component_By_Save_Id<StreamT>(fe, tid, stream)) {
-					stream.Fail();
-					return false;
-				}
+				(void)Write_Component_By_Save_Id<StreamT>(fe, tid, stream);
 				blob_bytes = stream.Offset() - blob_start;
 				stream.Overwrite_Bytes(blob_len_pos, &blob_bytes, sizeof(blob_bytes));
 			}
@@ -664,11 +849,12 @@ struct ComponentRegistry<Head, Tail...>
 		return !stream.Was_Error();
 	}
 
-	template<typename StreamT, typename ResolveOwnerFn>
-	static bool Load_Trailer(flecs::world & world, StreamT & stream, ResolveOwnerFn && resolve_owner)
+	template<typename StreamT, typename ResolveOwnerEntityFn>
+	static bool Load_Trailer(flecs::world & world, StreamT & stream, ResolveOwnerEntityFn && resolve_owner_entity)
 	{
+		(void)world;
 		if (stream.Offset() >= stream.Size()) {
-			return !stream.Was_Error();
+			return true; // Backward compatibility: saves written before EC01 have no trailer.
 		}
 
 		std::uint32_t magic = 0;
@@ -681,16 +867,16 @@ struct ComponentRegistry<Head, Tail...>
 			stream.Fail();
 			return false;
 		}
-
-		typename StreamT::BoundScope trailer_scope(stream, stream.Offset() + payload_bytes);
-		if (stream.Was_Error()) {
+		if (!stream.Fits(static_cast<int>(payload_bytes), 1)) {
 			return false;
 		}
 
-		// Read type directory (metadata used for diagnostics/forward-compat)
+		unsigned int const trailer_end = stream.Offset() + payload_bytes;
+		typename StreamT::BoundScope trailer_scope(stream, trailer_end);
+
 		std::uint32_t type_count = 0;
 		stream.Serialize(type_count);
-		if (!stream.Fits(static_cast<int>(type_count), sizeof(std::uint64_t) + sizeof(std::uint16_t))) {
+		if (!stream.Fits(static_cast<int>(type_count), 10)) {
 			return false;
 		}
 		for (std::uint32_t i = 0; i < type_count; ++i) {
@@ -702,13 +888,14 @@ struct ComponentRegistry<Head, Tail...>
 				return false;
 			}
 			if (name_len > 0) {
-				std::string dummy(name_len, '\0');
-				stream.Serialize_Bytes(dummy.data(), static_cast<int>(name_len));
+				std::vector<char> skip_name(name_len);
+				stream.Serialize_Bytes(skip_name.data(), static_cast<int>(name_len));
 			}
 		}
 
-		// Subpass 1: Materialize all entities and ensure<C>() every component slot
-		// BEFORE any Serialize() call registers raw component addresses in Swizzler!
+		// Subpass 1: Attach all saved component types onto the already-constructed
+		// owners' flecs::entity handles first, pinning every archetype table before
+		// Subpass 2 registers any interior component pointer with Swizzler!
 		std::uint32_t entity_count = 0;
 		stream.Serialize(entity_count);
 		if (!stream.Fits(static_cast<int>(entity_count), 8)) {
@@ -744,14 +931,18 @@ struct ComponentRegistry<Head, Tail...>
 				return false;
 			}
 
-			void * owner_ptr = resolve_owner(static_cast<RootKind>(root), owner_id);
-			if (owner_ptr != nullptr) {
-				bool const is_disabled = (flags & 1u) != 0u;
-				item.FlecsId = Detail::Materialize_Loaded_Owner(static_cast<RootKind>(root), owner_ptr, is_disabled);
-				flecs::entity fe(world, static_cast<flecs::entity_t>(item.FlecsId));
-				for (std::uint64_t const tid : item.TypeIds) {
-					(void)Ensure_Component_By_Save_Id<StreamT>(fe, tid);
+			item.Entity = resolve_owner_entity(static_cast<RootKind>(root), owner_id);
+			if (item.Entity.id() != 0 && item.Entity.is_alive()) {
+				if ((flags & 1u) != 0u) {
+					item.Entity.add(flecs::Disabled);
+				} else {
+					item.Entity.remove(flecs::Disabled);
 				}
+				for (std::uint64_t const tid : item.TypeIds) {
+					(void)Ensure_Component_By_Save_Id<StreamT>(item.Entity, tid);
+				}
+			} else {
+				item.Entity = flecs::entity::null();
 			}
 			loaded.push_back(std::move(item));
 		}
@@ -767,9 +958,8 @@ struct ComponentRegistry<Head, Tail...>
 				unsigned int const blob_end = stream.Offset() + blob_bytes;
 				typename StreamT::BoundScope blob_scope(stream, blob_end);
 				bool consumed = false;
-				if (item.FlecsId != 0) {
-					flecs::entity fe(world, static_cast<flecs::entity_t>(item.FlecsId));
-					consumed = Read_Component_By_Save_Id<StreamT>(fe, tid, stream);
+				if (item.Entity.id() != 0) {
+					consumed = Read_Component_By_Save_Id<StreamT>(item.Entity, tid, stream);
 				}
 				if (!consumed && stream.Offset() < blob_end) {
 					unsigned int const rem = blob_end - stream.Offset();
@@ -787,14 +977,8 @@ struct ComponentRegistry<Head, Tail...>
 	}
 
 	// -----------------------------------------------------------------------
-	// G12 / E27: 4-Level Per-Component & Global Compute_CRC
+	// G12 / E27: 4-Level Per-Component & Global Compute_CRC over flecs::entity
 	// -----------------------------------------------------------------------
-
-	template<typename C, EntityRoot Root>
-	static bool Compute_Entity_Component_CRC(TypedEntity<Root> const & holder, CRCEngine & crc)
-	{
-		return holder.template Compute_CRC_Of<C>(crc);
-	}
 
 	static void Compute_Flecs_Entity_CRC(flecs::entity fe, CRCEngine & crc)
 	{
@@ -806,16 +990,27 @@ struct ComponentRegistry<Head, Tail...>
 		Next::Compute_Flecs_Entity_CRC(fe, crc);
 	}
 
-	template<EntityRoot Root>
-	static void Compute_Entity_CRC(TypedEntity<Root> const & holder, CRCEngine & crc)
+	static void Compute_Entity_CRC(flecs::entity fe, CRCEngine & crc)
 	{
-		if (!holder.Is_Materialized() || !Is_World_Alive()) {
+		if (!Has_User_Components(fe)) {
 			return;
 		}
-		flecs::entity fe(World(), static_cast<flecs::entity_t>(holder.Id()));
-		if (fe.is_alive()) {
-			Compute_Flecs_Entity_CRC(fe, crc);
+		Compute_Flecs_Entity_CRC(fe, crc);
+	}
+
+	template<typename C>
+	static bool Compute_Entity_Component_CRC(flecs::entity fe, CRCEngine & crc)
+	{
+		static_assert(contains<C>, "Component type C is not registered in this ComponentRegistry.");
+		if constexpr (HasComputeCRC<C>) {
+			if (fe.id() != 0 && fe.is_alive()) {
+				if (C const * comp = fe.try_get<C>(); comp != nullptr) {
+					Detail::Feed_Component_CRC(*comp, fe, crc);
+					return true;
+				}
+			}
 		}
+		return false;
 	}
 
 	template<typename OwnerKeyFn>
@@ -942,21 +1137,28 @@ struct ComponentRegistry<Head, Tail...>
 	}
 
 	// -----------------------------------------------------------------------
-	// Entity-Scoped Dispatchers (E02..E26)
+	// Entity-Scoped Dispatchers (E02..E26) Directly Over flecs::entity
 	// -----------------------------------------------------------------------
 
 	template<typename OwnerT>
 	static void Dispatch_Detach(OwnerT & owner, AbstractClass const * target, bool all)
 	{
-		auto & holder = Detail::Holder_Of(owner);
-		if (!holder.Is_Materialized() || !Is_World_Alive()) {
+		flecs::entity fe = Entity_Of(owner);
+		if (!Has_User_Components(fe)) {
 			return;
 		}
-		using RootT = typename std::remove_cvref_t<decltype(holder)>::RootType;
-		if constexpr (HasDetachRoot<Head, RootT> || HasDetachPlain<Head>) {
-			flecs::entity fe(World(), static_cast<flecs::entity_t>(holder.Id()));
+		if constexpr (
+			(std::derived_from<OwnerT, ObjectClass> && HasDetachRoot<Head, ObjectClass>) ||
+			(std::same_as<OwnerT, CellClass> && HasDetachRoot<Head, CellClass>) ||
+			(std::derived_from<OwnerT, LocomotionClass> && HasDetachRoot<Head, LocomotionClass>) ||
+			HasDetachPlain<Head>
+		) {
 			if (Head * comp = fe.try_get_mut<Head>(); comp != nullptr) {
-				if constexpr (HasDetachRoot<Head, RootT>) {
+				if constexpr (std::derived_from<OwnerT, ObjectClass> && HasDetachRoot<Head, ObjectClass>) {
+					comp->Detach(owner, target, all);
+				} else if constexpr (std::same_as<OwnerT, CellClass> && HasDetachRoot<Head, CellClass>) {
+					comp->Detach(owner, target, all);
+				} else if constexpr (std::derived_from<OwnerT, LocomotionClass> && HasDetachRoot<Head, LocomotionClass>) {
 					comp->Detach(owner, target, all);
 				} else {
 					comp->Detach(target, all);
@@ -970,12 +1172,11 @@ struct ComponentRegistry<Head, Tail...>
 	template<typename OwnerT, typename... Args> \
 	static void FuncName(OwnerT & owner, Args &&... args) \
 	{ \
-		auto & holder = Detail::Holder_Of(owner); \
-		if (!holder.Is_Materialized() || !Is_World_Alive()) { \
+		flecs::entity fe = Entity_Of(owner); \
+		if (!Has_User_Components(fe)) { \
 			return; \
 		} \
 		if constexpr (ConceptName##WithSelf<Head, OwnerT, Args...> || ConceptName##NoSelf<Head, Args...>) { \
-			flecs::entity fe(World(), static_cast<flecs::entity_t>(holder.Id())); \
 			if (Head * comp = fe.try_get_mut<Head>(); comp != nullptr) { \
 				if constexpr (ConceptName##WithSelf<Head, OwnerT, Args...>) { \
 					comp->MethodName(owner, args...); \
@@ -991,12 +1192,11 @@ struct ComponentRegistry<Head, Tail...>
 	template<typename OwnerT, typename... Args> \
 	static void FuncName(OwnerT const & owner, Args &&... args) \
 	{ \
-		auto const & holder = Detail::Holder_Of(owner); \
-		if (!holder.Is_Materialized() || !Is_World_Alive()) { \
+		flecs::entity fe = Entity_Of(owner); \
+		if (!Has_User_Components(fe)) { \
 			return; \
 		} \
 		if constexpr (ConceptName##WithSelf<Head, OwnerT, Args...> || ConceptName##NoSelf<Head, Args...>) { \
-			flecs::entity fe(World(), static_cast<flecs::entity_t>(holder.Id())); \
 			if (Head const * comp = fe.try_get<Head>(); comp != nullptr) { \
 				if constexpr (ConceptName##WithSelf<Head, OwnerT, Args...>) { \
 					comp->MethodName(owner, args...); \
@@ -1020,8 +1220,8 @@ struct ComponentRegistry<Head, Tail...>
 	template<typename OwnerT, typename HouseT>
 	static void Dispatch_Captured(OwnerT & owner, HouseT * oldowner, HouseT * newowner)
 	{
-		auto & holder = Detail::Holder_Of(owner);
-		if (!holder.Is_Materialized() || !Is_World_Alive()) {
+		flecs::entity fe = Entity_Of(owner);
+		if (!Has_User_Components(fe)) {
 			return;
 		}
 		if constexpr (
@@ -1030,7 +1230,6 @@ struct ComponentRegistry<Head, Tail...>
 			HasCapturedWithSelf<Head, OwnerT, HouseT *> ||
 			HasCapturedNoSelf<Head, HouseT *>
 		) {
-			flecs::entity fe(World(), static_cast<flecs::entity_t>(holder.Id()));
 			if (Head * comp = fe.try_get_mut<Head>(); comp != nullptr) {
 				if constexpr (HasCapturedWithSelf<Head, OwnerT, HouseT *, HouseT *>) {
 					comp->Captured(owner, oldowner, newowner);
@@ -1092,17 +1291,15 @@ struct ComponentRegistry<Head, Tail...>
 #undef OPENTS_EC_IMPL_MUT_ENTITY_DISPATCH
 #undef OPENTS_EC_IMPL_CONST_ENTITY_DISPATCH
 
-	// E26a/E26b: Piggyback start/end also automatically toggles flecs::Disabled
-	// on the carried locomotor via the base case!
-	template<typename OwnerT>
-	static void Dispatch_Begin_Piggyback(OwnerT & carrier, ILocomotion * carried)
+	// E26a/E26b: Piggyback start/end toggles flecs::Disabled on the carried locomotor.
+	template<typename OwnerT, typename CarriedIface>
+	static void Dispatch_Begin_Piggyback(OwnerT & carrier, CarriedIface * carried)
 	{
-		auto & holder = Detail::Holder_Of(carrier);
-		if (holder.Is_Materialized() && Is_World_Alive()) {
-			if constexpr (HasBeginPiggybackWithSelf<Head, OwnerT, ILocomotion *> || HasBeginPiggybackNoSelf<Head, ILocomotion *>) {
-				flecs::entity fe(World(), static_cast<flecs::entity_t>(holder.Id()));
+		flecs::entity fe = Entity_Of(carrier);
+		if (Has_User_Components(fe)) {
+			if constexpr (HasBeginPiggybackWithSelf<Head, OwnerT, CarriedIface *> || HasBeginPiggybackNoSelf<Head, CarriedIface *>) {
 				if (Head * comp = fe.try_get_mut<Head>(); comp != nullptr) {
-					if constexpr (HasBeginPiggybackWithSelf<Head, OwnerT, ILocomotion *>) {
+					if constexpr (HasBeginPiggybackWithSelf<Head, OwnerT, CarriedIface *>) {
 						comp->Begin_Piggyback(carrier, carried);
 					} else {
 						comp->Begin_Piggyback(carried);
@@ -1113,15 +1310,14 @@ struct ComponentRegistry<Head, Tail...>
 		Next::Dispatch_Begin_Piggyback(carrier, carried);
 	}
 
-	template<typename OwnerT>
-	static void Dispatch_End_Piggyback(OwnerT & carrier, ILocomotion * restored)
+	template<typename OwnerT, typename CarriedIface>
+	static void Dispatch_End_Piggyback(OwnerT & carrier, CarriedIface * restored)
 	{
-		auto & holder = Detail::Holder_Of(carrier);
-		if (holder.Is_Materialized() && Is_World_Alive()) {
-			if constexpr (HasEndPiggybackWithSelf<Head, OwnerT, ILocomotion *> || HasEndPiggybackNoSelf<Head, ILocomotion *>) {
-				flecs::entity fe(World(), static_cast<flecs::entity_t>(holder.Id()));
+		flecs::entity fe = Entity_Of(carrier);
+		if (Has_User_Components(fe)) {
+			if constexpr (HasEndPiggybackWithSelf<Head, OwnerT, CarriedIface *> || HasEndPiggybackNoSelf<Head, CarriedIface *>) {
 				if (Head * comp = fe.try_get_mut<Head>(); comp != nullptr) {
-					if constexpr (HasEndPiggybackWithSelf<Head, OwnerT, ILocomotion *>) {
+					if constexpr (HasEndPiggybackWithSelf<Head, OwnerT, CarriedIface *>) {
 						comp->End_Piggyback(carrier, restored);
 					} else {
 						comp->End_Piggyback(restored);
@@ -1132,11 +1328,5 @@ struct ComponentRegistry<Head, Tail...>
 		Next::Dispatch_End_Piggyback(carrier, restored);
 	}
 };
-
-template<EntityRoot Root>
-inline void TypedEntity<Root>::Compute_CRC(CRCEngine & crc) const
-{
-	GameComponents::Compute_Entity_CRC(*this, crc);
-}
 
 } // namespace EC

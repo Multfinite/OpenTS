@@ -9,24 +9,21 @@
 
 #pragma once
 
-// Lightweight, <flecs.h>-free entity handle header safe to include from
-// object.h, cell.h, iloco.h, and loco.h without pulling third-party headers
-// or OS macros into general engine translation units.
-//
-// Translation units that attach, query, or remove concrete component types
-// include "ec/entity_inl.h" alongside the component definitions.
+// Core entity-root traits, strongly typed OwnerLink<Root> back-reference, and
+// 1:1 constructor/destructor lifecycle helpers for flecs::entity handles stored
+// directly on ObjectClass, CellClass, and LocomotionClass.
+
+#include "ec/world.h"
 
 #include <compare>
 #include <concepts>
-#include <cstddef>
 #include <cstdint>
 #include <type_traits>
-#include <utility>
 
 class ObjectClass;
 class CellClass;
 class LocomotionClass;
-class CRCEngine;
+struct ILocomotion;
 
 namespace EC {
 
@@ -66,7 +63,7 @@ consteval RootKind Root_Kind_Of(void) noexcept
 	}
 }
 
-// Strongly typed back-link component stored on every materialized flecs entity,
+// Strongly typed back-link component stored on every root's flecs::entity,
 // allowing dense table iteration to pass ObjectClass&, CellClass&, or
 // LocomotionClass& statically with zero void* or dynamic_cast.
 template<EntityRoot Root>
@@ -75,247 +72,59 @@ struct OwnerLink
 	Root * ptr = nullptr;
 };
 
-namespace Detail {
-
-std::uint64_t Materialize_Entity_Handle(RootKind kind, void * owner, bool disabled) noexcept;
-void Destroy_Entity_Handle(std::uint64_t id) noexcept;
-void Rebind_Entity_Owner(std::uint64_t id, RootKind kind, void * owner) noexcept;
-void Set_Entity_Disabled_Flag(std::uint64_t id, bool disabled) noexcept;
-bool Get_Entity_Disabled_Flag(std::uint64_t id) noexcept;
-
-} // namespace Detail
-
-// RAII move-only token for temporarily detaching an entity handle while
-// CellClass slots are shifted or rebuilt in MapClass::Set_Map_Dimensions.
-// Any handle not reclaimed via Release() is destroyed automatically on scope exit.
-class DetachedEntitySlot
-{
-	public:
-		constexpr DetachedEntitySlot(void) noexcept = default;
-		constexpr explicit DetachedEntitySlot(std::uint64_t id) noexcept : IdValue(id) {}
-
-		DetachedEntitySlot(DetachedEntitySlot const &) = delete;
-		DetachedEntitySlot & operator=(DetachedEntitySlot const &) = delete;
-
-		constexpr DetachedEntitySlot(DetachedEntitySlot && other) noexcept : IdValue(other.IdValue)
-		{
-			other.IdValue = 0;
-		}
-
-		DetachedEntitySlot & operator=(DetachedEntitySlot && other) noexcept
-		{
-			if (this != &other) {
-				if (IdValue != 0) {
-					Detail::Destroy_Entity_Handle(IdValue);
-				}
-				IdValue = other.IdValue;
-				other.IdValue = 0;
-			}
-			return *this;
-		}
-
-		~DetachedEntitySlot(void) noexcept
-		{
-			if (IdValue != 0) {
-				Detail::Destroy_Entity_Handle(IdValue);
-				IdValue = 0;
-			}
-		}
-
-		constexpr std::uint64_t Id(void) const noexcept { return IdValue; }
-
-		constexpr std::uint64_t Release(void) noexcept
-		{
-			std::uint64_t const out = IdValue;
-			IdValue = 0;
-			return out;
-		}
-
-	private:
-		std::uint64_t IdValue = 0;
-};
-
-// Non-owning typed view passed to generic component hooks (e.g. void AI(EntityView))
-// so root-agnostic components can inspect sibling components on the same entity.
-class EntityView
-{
-	public:
-		constexpr EntityView(void) noexcept = default;
-		constexpr explicit EntityView(std::uint64_t id) noexcept : IdValue(id) {}
-
-		constexpr std::uint64_t Id(void) const noexcept { return IdValue; }
-		constexpr bool Is_Valid(void) const noexcept { return IdValue != 0; }
-
-		template<typename C, typename... Args>
-		C & Emplace(Args &&... args);
-
-		template<typename C>
-		C & Add(C value = C{});
-
-		template<typename C>
-		C & Get(void);
-
-		template<typename C>
-		C const & Get(void) const;
-
-		template<typename C>
-		C * Try_Get(void) noexcept;
-
-		template<typename C>
-		C const * Try_Get(void) const noexcept;
-
-		template<typename C>
-		bool Has(void) const noexcept;
-
-		template<typename C>
-		void Remove(void) noexcept;
-
-	private:
-		std::uint64_t IdValue = 0;
-};
-
-// Component-holder embedded by value in ObjectClass, CellClass, and LocomotionClass.
-// Lazily allocates an underlying flecs entity only when the first component is added,
-// keeping the thousands of plain cells and objects completely free of ECS allocations.
+// Creates a flecs::entity bound 1:1 to `owner` (called in the root constructor).
 template<EntityRoot Root>
-class TypedEntity
+inline flecs::entity Create_Entity(Root * owner, bool disabled = false) noexcept
 {
-	public:
-		using RootType = Root;
+	flecs::entity entity = World().entity();
+	entity.set<OwnerLink<Root>>(OwnerLink<Root>{owner});
+	if (disabled) {
+		entity.add(flecs::Disabled);
+	}
+	return entity;
+}
 
-		constexpr explicit TypedEntity(Root * owner = nullptr) noexcept :
-			IdValue(0),
-			OwnerPtr(owner),
-			PendingDisabled(false)
-		{
-		}
+template<EntityRoot Root>
+inline flecs::entity Create_Entity(Root & owner, bool disabled = false) noexcept
+{
+	return Create_Entity(&owner, disabled);
+}
 
-		~TypedEntity(void) noexcept
-		{
-			Reset();
-		}
+// Destroys a root's flecs::entity (called in the root destructor and before
+// legacy placement-new reconstruction of CellClass slots).
+void Destroy_Entity(flecs::entity & entity) noexcept;
 
-		TypedEntity(TypedEntity const &) = delete;
+// Uniformly extracts the flecs::entity handle from any root object or ILocomotion.
+template<typename OwnerT>
+inline flecs::entity Entity_Of(OwnerT const & owner) noexcept
+{
+	if constexpr (requires { { owner.Entity } -> std::convertible_to<flecs::entity>; }) {
+		return owner.Entity;
+	} else {
+		return owner.Get_Entity();
+	}
+}
 
-		// Struct-level value copy (used by legacy cell-array shifts) intentionally
-		// leaves both the destination's owner pointer and entity handle untouched;
-		// explicit ownership transfer goes through Release_Id() / Adopt_Id().
-		TypedEntity & operator=(TypedEntity const &) noexcept
-		{
-			return *this;
-		}
-
-		TypedEntity(TypedEntity &&) = delete;
-		TypedEntity & operator=(TypedEntity &&) = delete;
-
-		constexpr std::uint64_t Id(void) const noexcept { return IdValue; }
-		constexpr bool Is_Materialized(void) const noexcept { return IdValue != 0; }
-		constexpr Root * Owner(void) const noexcept { return OwnerPtr; }
-		constexpr EntityView View(void) const noexcept { return EntityView(IdValue); }
-
-		void Bind_Owner(Root * owner) noexcept
-		{
-			OwnerPtr = owner;
-			if (IdValue != 0) {
-				Detail::Rebind_Entity_Owner(IdValue, Root_Kind_Of<Root>(), OwnerPtr);
-			}
-		}
-
-		void Reset(void) noexcept
-		{
-			if (IdValue != 0) {
-				std::uint64_t const doomed = IdValue;
-				IdValue = 0;
-				Detail::Destroy_Entity_Handle(doomed);
-			}
-			PendingDisabled = false;
-		}
-
-		std::uint64_t Release_Id(void) noexcept
-		{
-			std::uint64_t const out = IdValue;
-			IdValue = 0;
-			PendingDisabled = false;
-			return out;
-		}
-
-		void Adopt_Id(std::uint64_t id) noexcept
-		{
-			if (IdValue == id) {
-				if (IdValue != 0) {
-					Detail::Rebind_Entity_Owner(IdValue, Root_Kind_Of<Root>(), OwnerPtr);
-				}
-				return;
-			}
-			if (IdValue != 0) {
-				Detail::Destroy_Entity_Handle(IdValue);
-			}
-			IdValue = id;
-			if (IdValue != 0) {
-				Detail::Rebind_Entity_Owner(IdValue, Root_Kind_Of<Root>(), OwnerPtr);
-				PendingDisabled = Detail::Get_Entity_Disabled_Flag(IdValue);
-			} else {
-				PendingDisabled = false;
-			}
-		}
-
-		void Set_Disabled(bool disabled) noexcept
-		{
-			PendingDisabled = disabled;
-			if (IdValue != 0) {
-				Detail::Set_Entity_Disabled_Flag(IdValue, disabled);
-			}
-		}
-
-		bool Is_Disabled(void) const noexcept
-		{
-			if (IdValue != 0) {
-				return Detail::Get_Entity_Disabled_Flag(IdValue);
-			}
-			return PendingDisabled;
-		}
-
-		std::uint64_t Ensure_Materialized(void) noexcept
-		{
-			if (IdValue == 0) {
-				IdValue = Detail::Materialize_Entity_Handle(Root_Kind_Of<Root>(), OwnerPtr, PendingDisabled);
-			}
-			return IdValue;
-		}
-
-		template<typename C, typename... Args>
-		C & Emplace(Args &&... args);
-
-		template<typename C>
-		C & Add(C value = C{});
-
-		template<typename C>
-		C & Get(void);
-
-		template<typename C>
-		C const & Get(void) const;
-
-		template<typename C>
-		C * Try_Get(void) noexcept;
-
-		template<typename C>
-		C const * Try_Get(void) const noexcept;
-
-		template<typename C>
-		bool Has(void) const noexcept;
-
-		template<typename C>
-		void Remove(void) noexcept;
-
-		template<typename C>
-		bool Compute_CRC_Of(CRCEngine & crc) const;
-
-		void Compute_CRC(CRCEngine & crc) const;
-
-	private:
-		std::uint64_t IdValue = 0;
-		Root * OwnerPtr = nullptr;
-		bool PendingDisabled = false;
-};
+// Fast O(1) flecs archetype-table check: returns true iff `fe` carries at least
+// one component beyond its mandatory OwnerLink<Root> (and optional flecs::Disabled).
+inline bool Has_User_Components(flecs::entity fe) noexcept
+{
+	if (fe.id() == 0 || !Is_World_Alive()) {
+		return false;
+	}
+	ecs_world_t const * world_ptr = fe.world().c_ptr();
+	ecs_table_t const * table = ecs_get_table(world_ptr, fe.id());
+	if (table == nullptr) {
+		return false;
+	}
+	ecs_type_t const * type = ecs_table_get_type(table);
+	if (type == nullptr || type->count <= 1) {
+		return false;
+	}
+	if (type->count == 2 && ecs_has_id(world_ptr, fe.id(), flecs::Disabled)) {
+		return false;
+	}
+	return true;
+}
 
 } // namespace EC
