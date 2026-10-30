@@ -87,6 +87,10 @@ class LocomotionClass : public IPersistent, public ILocomotion
 		virtual int Get_Track_Index(void) override {return(-1);}
 		virtual int Get_Speed_Accum(void) override {return(-1);}
 
+		virtual EC::TypedEntity<LocomotionClass> & Components(void) noexcept override {return(CompHolder);}
+		virtual EC::TypedEntity<LocomotionClass> const & Components(void) const noexcept override {return(CompHolder);}
+		FootClass * Linked_Object(void) const noexcept {return(LinkedTo);}
+
 
 		/*
 		 * Lists this locomotor's members for the save game. An implementation serializes
@@ -132,4 +136,9 @@ class LocomotionClass : public IPersistent, public ILocomotion
 		 * persistence machinery never assumes a locomotor is already safely on disk.
 		 */
 		bool Dirty;
+
+		/*
+		 * Lazily materialized component-holder bound to this locomotor.
+		 */
+		EC::TypedEntity<LocomotionClass> CompHolder;
 };

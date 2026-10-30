@@ -35,6 +35,7 @@
 #include "debug.h"
 #include "dialog.h"
 #include "dsurface.h"
+#include "ec/engine_hooks.h"
 #include "fog.h"
 #include "globals.h"
 #include "goptions.h"
@@ -282,6 +283,7 @@ bool Main_Loop(void)
 #endif
 
 	BStart(BENCH_GAME_FRAME);
+	EC::Hooks::Frame_Begin_All();
 
 	/*
 	**	If there is no theme playing, but it looks like one is required, then start one
@@ -361,6 +363,7 @@ bool Main_Loop(void)
 	if (PlayerWins || PlayerLoses || PlayerRestarts || PlayerAborts) {
 		if (PlayerWins || PlayerLoses) {
 			if (UIShell.Screen_Shown()) {
+				EC::Hooks::Frame_End_All();
 				BEnd(BENCH_GAME_FRAME);
 				InMainLoop = false;
 				return(true);
@@ -424,6 +427,7 @@ bool Main_Loop(void)
 		SaveManager.Service();
 	}
 
+	EC::Hooks::Frame_End_All();
 	BEnd(BENCH_GAME_FRAME);
 
 	InMainLoop = false;

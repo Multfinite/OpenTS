@@ -97,6 +97,7 @@
 #include "dbgprint.h"
 #include "draw.h"
 #include "dsurface.h"
+#include "ec/engine_hooks.h"
 #include "fog.h"
 #include "globals.h"
 #include "houstype.h"
@@ -215,6 +216,8 @@ LEPTON CellClass::Get_Height(Point2D const & point) const
 /// </summary>
 CellClass::~CellClass(void)
 {
+	Components.Reset();
+
 	if (FoggedObjects) {
 		delete FoggedObjects;
 		FoggedObjects = NULL;
@@ -316,11 +319,19 @@ CellClass::CellClass(void) :
 	Height(0),
 	Ramp(0),
 	Elevation(0),
-	AdjacentObjectCount(0)
+	AdjacentObjectCount(0),
+	Components(this)
 {
 	Create_ID();
 	Flag.Composite = 0;
 	BridgeFlag.Composite = 0;
+}
+
+
+void CellClass::Compute_CRC(CRCEngine & crc) const
+{
+	BASECLASS::Compute_CRC(crc);
+	EC::Hooks::Compute_Cell_CRC(*this, crc);
 }
 
 
@@ -1421,6 +1432,7 @@ void CellClass::Recalc_Attributes(int cell_height)
 	zone->Height = Height;
 	zone->Passability = Passability;
 	subzone->Height = Height;
+	EC::Hooks::On_Recalc_Attributes(*this);
 }
 
 
@@ -1793,6 +1805,7 @@ void CellClass::Occupy_Down(ObjectClass * object, bool bridge)
 			object->Set_Occupy_Bit(object->Get_Coord());
 		}
 	}
+	EC::Hooks::On_Occupy_Down(*this, object, bridge);
 }
 
 
@@ -1852,6 +1865,7 @@ void CellClass::Occupy_Up(ObjectClass * object, bool bridge)
 			object->Clear_Occupy_Bit(object->Get_Coord());
 		}
 	}
+	EC::Hooks::On_Occupy_Up(*this, object, bridge);
 }
 
 
@@ -2348,6 +2362,7 @@ void CellClass::Draw_Overlay(Point2D const & xpoint, Rect const & cliprect)
 		}
 		Draw_Shape(*LogicalSurface, *Drawer, shape, OverlayData, point, cliprect, (ShapeFlags_Type)(SHAPE_CENTER | SHAPE_WIN_REL | SHAPE_ALPHA | SHAPE_ZWRITE), 0, offsetY - yoffset - 2, otype->IsDrawFlat ? ZGRAD_GROUND : ZGRAD_90DEG, TileBrightness);
 	}
+	EC::Hooks::On_Draw_Overlay(*this, point, cliprect);
 }
 
 
@@ -2671,6 +2686,7 @@ void CellClass::Draw_It(Point2D const & xdrawpoint, Rect const & cliprect, bool 
 			SmudgeTypes[Smudge]->Draw_It(drawpoint + Point2D(ISO_TILE_PIXEL_W / 2, TacticalRect.Y) - cliprect.TopLeft, cliprect, SmudgeData, LEVEL_LEPTON_H * Height, CellID);
 		}
 
+		EC::Hooks::On_Cell_Draw_It(*this, xdrawpoint, cliprect);
 		BEnd(BENCH_CELL);
 	}
 }
@@ -2912,6 +2928,7 @@ int CellClass::Reduce_Tiberium(int levels)
 			}
 		}
 		TacticalMap->Register_Dirty_Area(dirty);
+		EC::Hooks::On_Reduce_Tiberium(*this, reducer);
 		return(reducer);
 	}
 	return(0);
@@ -4001,6 +4018,7 @@ crate_money:
 			coord = Cell_Coord() + Coord(0, 0, 200);
 			new AnimClass(AnimTypes[CrateAnims[powerup]], coord);
 		}
+		EC::Hooks::On_Goodie_Check(*this, object);
 	}
 
 	return(true);
@@ -4311,7 +4329,10 @@ bool CellClass::Can_Tiberium_Spread(void) const
 bool CellClass::Grow_Tiberium(void)
 {
 	if (Can_Tiberium_Grow()) {
-		return(Place_Tiberium(Tiberium_Type_Here(), 1));
+		if (Place_Tiberium(Tiberium_Type_Here(), 1)) {
+			EC::Hooks::On_Grow_Tiberium(*this);
+			return(true);
+		}
 	}
 	return(false);
 }
@@ -4355,7 +4376,11 @@ bool CellClass::Spread_Tiberium(bool forced)
 		CellClass * newcell = &Adjacent_Cell(FacingType(Facing_Add(index, offset))); //was (index+offset);
 
 		if (newcell != NULL && newcell->Can_Tiberium_Germinate(tiberium)) {
-			return(newcell->Place_Tiberium(tibtype, 5));
+			if (newcell->Place_Tiberium(tibtype, 5)) {
+				EC::Hooks::On_Spread_Tiberium(*this, forced);
+				return(true);
+			}
+			return(false);
 		}
 	}
 	return(false);
@@ -4544,6 +4569,11 @@ void CellClass::Post_Load(void)
 /// </summary>
 void CellClass::Recalc_Passability(void)
 {
+	struct PassabilityHookScope {
+		CellClass & Self;
+		~PassabilityHookScope() { EC::Hooks::On_Recalc_Passability(Self); }
+	} hook_scope{*this};
+
 	if (!Map.In_Local_Radar(CellID)) {
 		Passability = PASSABLE_OUTSIDE;
 		return;
@@ -5223,6 +5253,7 @@ void CellClass::Detach(AbstractClass const * target)
 			FoggedObjects->Delete((FoggedObjectClass *)target);
 		}
 	}
+	EC::Hooks::On_Cell_Detach(*this, target);
 }
 
 

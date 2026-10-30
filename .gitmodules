@@ -19,3 +19,6 @@
 [submodule "HYAI"]
 	path = HYAI
 	url = https://github.com/Multfinite/HYAI.git
+[submodule "thirdparty/flecs"]
+	path = thirdparty/flecs
+	url = https://github.com/SanderMertens/flecs.git

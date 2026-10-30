@@ -5,8 +5,8 @@ type: meta
 status: approved
 authority: contract
 visibility: internal
-version: "2.0"
-updated: "2026-10-22"
+version: "2.1"
+updated: "2026-10-30"
 ---
 
 # Решения домена software
@@ -15,4 +15,4 @@ updated: "2026-10-22"
 
 | ID | Название | Статус |
 | --- | --- | --- |
-| — | — | — |
+| [`SW-0001`](SW-0001-static-ec-flecs-architecture.md) | Статически типизированная EC-система на базе `flecs` (без ECS-систем) | approved |

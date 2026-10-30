@@ -18,6 +18,7 @@
 #include "cell.h"
 #include "combat.h"
 #include "coord.h"
+#include "ec/engine_hooks.h"
 #include "foot.h"
 #include "globals.h"
 #include "house.h"
@@ -249,6 +250,9 @@ void DropPodLocomotionClass::Serialize(SaveStreamClass & stream)
 			Save_Object(stream, Piggybacker.get());
 		} else {
 			Piggybacker = Load_Locomotor(stream);
+			if (Piggybacker != nullptr) {
+				Piggybacker->Components().Set_Disabled(true);
+			}
 		}
 	}
 }
@@ -277,6 +281,7 @@ bool DropPodLocomotionClass::Begin_Piggyback(std::unique_ptr<ILocomotion> & carr
 		return(false);
 	}
 	Piggybacker = std::move(carried);
+	EC::Hooks::On_Begin_Piggyback(*this, Piggybacker.get());
 	return(true);
 }
 
@@ -289,7 +294,11 @@ bool DropPodLocomotionClass::Begin_Piggyback(std::unique_ptr<ILocomotion> & carr
 /// <returns>Returns with the locomotor that was riding, or nothing when none was.</returns>
 std::unique_ptr<ILocomotion> DropPodLocomotionClass::End_Piggyback(void)
 {
-	return(std::move(Piggybacker));
+	std::unique_ptr<ILocomotion> restored = std::move(Piggybacker);
+	if (restored != nullptr) {
+		EC::Hooks::On_End_Piggyback(*this, restored.get());
+	}
+	return(restored);
 }
 
 

@@ -38,6 +38,7 @@
 #include "display.h"
 #include "draw.h"
 #include "dsurface.h"
+#include "ec/engine_hooks.h"
 #include "fog.h"
 #include "font.h"
 #include "globals.h"
@@ -1293,7 +1294,9 @@ void Tactical::Render(Surface & surface, bool fullredraw, int drawpass)
 
 		VeinholeMonsterClass::Draw_All();
 		IonBlastClass::Draw_All();
+		EC::Hooks::Pre_Render_All();
 		Draw_Objects(true);
+		EC::Hooks::Post_Render_All();
 		SpotLightClass::Draw_All();
 		LaserDrawClass::Draw_All();
 
@@ -2722,7 +2725,9 @@ void Tactical::Draw_Render_Hooks(ObjectClass * object, Rect const & cliprect)
 	Point2D pixel;
 	if (TacticalMap->Coord_To_Pixel(object->Center_Coord(), pixel)) {
 		object->Draw_Pre_Render(pixel, cliprect);
+		EC::Hooks::On_Draw_Pre_Render(*object, pixel, cliprect);
 		object->Draw_Post_Render(pixel, cliprect);
+		EC::Hooks::On_Draw_Post_Render(*object, pixel, cliprect);
 	}
 }
 
@@ -2808,8 +2813,10 @@ void Tactical::Draw_Objects(bool forced)
 				Point2D pixel;
 				if (TacticalMap->Coord_To_Pixel(obj->Center_Coord(), pixel)) {
 					obj->Draw_Pre_Render(pixel, TacticalRect);
+					EC::Hooks::On_Draw_Pre_Render(*obj, pixel, TacticalRect);
 					obj->Render(TacticalRect, forced, false);
 					obj->Draw_Post_Render(pixel, TacticalRect);
+					EC::Hooks::On_Draw_Post_Render(*obj, pixel, TacticalRect);
 				}
 			}
 		}

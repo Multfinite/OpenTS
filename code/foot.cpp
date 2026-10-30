@@ -102,6 +102,7 @@
 #include "cell.h"
 #include "convert.h"
 #include "ddist.h"
+#include "ec/engine_hooks.h"
 #include "goptions.h"
 #include "house.h"
 #include "incdec.h"
@@ -1443,6 +1444,7 @@ bool FootClass::Unlimbo(Coord const & coord, Dir256 dir)
 	if (BASECLASS::Unlimbo(coord, dir)) {
 
 		Locomotion->Unlimbo();
+		EC::Hooks::On_Loco_Unlimbo(*Locomotion);
 
 		bool off = false;
 		if (IonStormClass::Is_Ion_Storm_Active()) {
@@ -2118,6 +2120,7 @@ void FootClass::Per_Cell_Process(PCPType why)
 	}
 
 	BASECLASS::Per_Cell_Process(why);
+	EC::Hooks::On_Per_Cell_Process(*this, why);
 }
 
 
@@ -2399,10 +2402,13 @@ void FootClass::Assign_Destination(AbstractClass * target, bool)
 			PathDelay = 1;
 		}
 
-		Locomotion->Move_To(NavCom->Destination_Coord());
+		Coord const dest_coord = NavCom->Destination_Coord();
+		Locomotion->Move_To(dest_coord);
+		EC::Hooks::On_Move_To(*Locomotion, dest_coord);
 
 	} else if (RTTI != RTTI_AIRCRAFT || (CurrentMission != MISSION_ATTACK && MissionQueue != MISSION_ATTACK) || TarCom == NULL) {
 		Locomotion->Stop_Moving();
+		EC::Hooks::On_Stop_Moving(*Locomotion);
 		NavCom = NULL;
 	}
 
@@ -2414,6 +2420,7 @@ void FootClass::Assign_Destination(AbstractClass * target, bool)
 	IsToPathAroundBlockage = false;
 	BlockagePathDelay = Rule->BlockagePathDelay;
 	PathDelay = 0;
+	EC::Hooks::On_Assign_Destination(*this, NavCom);
 }
 
 
@@ -2642,6 +2649,12 @@ void FootClass::Detach(AbstractClass const * target, bool all)
 	int index;
 
 	BASECLASS::Detach(target, all);
+
+	for (ILocomotion * loco = Locomotion.get(); loco != NULL; ) {
+		EC::Hooks::On_Loco_Detach(*loco, target, all);
+		IPiggyback * piggy = Piggyback_Of(loco);
+		loco = piggy != NULL ? piggy->Carried_Locomotor() : NULL;
+	}
 
 	if (Team == target) {
 		Team = NULL;
@@ -3487,7 +3500,11 @@ bool FootClass::Limbo(void)
 			Locomotion->Mark_All_Occupation_Bits(0);
 		}
 	}
-	return(BASECLASS::Limbo());
+	bool const limboed = BASECLASS::Limbo();
+	if (limboed && Locomotion != NULL) {
+		EC::Hooks::On_Loco_Limbo(*Locomotion);
+	}
+	return(limboed);
 }
 
 
@@ -3683,6 +3700,12 @@ void FootClass::Compute_CRC(CRCEngine & crc) const
 	crc(IsScattering);
 	crc(IsIdle);
 	crc(IonBlastYDrawOffset);
+
+	for (ILocomotion const * loco = Locomotion.get(); loco != NULL; ) {
+		EC::Hooks::Compute_Loco_CRC(*loco, crc);
+		IPiggyback const * piggy = Piggyback_Of(const_cast<ILocomotion *>(loco));
+		loco = piggy != NULL ? piggy->Carried_Locomotor() : NULL;
+	}
 }
 
 

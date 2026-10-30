@@ -697,6 +697,7 @@ void MapClass::Init_Cells(void)
 		for (int x = 0; x < MAP_CELL_W; x++) {
 			int cellnum = x + y * MAP_CELL_H;
 			if (cellnum < Array.Length() && Array[cellnum] != NULL) {
+				Array[cellnum]->Components.Reset();
 				new (Array[cellnum]) CellClass;
 			}
 		}
@@ -749,6 +750,7 @@ void MapClass::Set_Map_Dimensions(Rect const & rect, bool reset_cells, int cell_
 	}
 
 	int cellcount = 0;
+	std::vector<EC::DetachedEntitySlot> shifted_entities;
 
 	if (!reset_cells) {
 		cells = (CellClass *) new char[sizeof(CellClass) * w * h];//new CellClass[w * h];
@@ -757,6 +759,7 @@ void MapClass::Set_Map_Dimensions(Rect const & rect, bool reset_cells, int cell_
 		cptr = Iterate();
 		cell = cptr->Fetch_CellID();
 		while (cptr != NULL) {
+			shifted_entities.emplace_back(cptr->Components.Release_Id());
 			*cells = *cptr;
 			cells->BridgeDeckCell = NULL;
 			cells->UnusedCell = NULL;
@@ -794,6 +797,7 @@ void MapClass::Set_Map_Dimensions(Rect const & rect, bool reset_cells, int cell_
 					cc->Set_CellID(cell);
 					Array[idx] = cc;
 				} else {
+					c->Components.Reset();
 					c = new(c) CellClass;
 					c->Set_CellID(cell);
 				}
@@ -809,6 +813,7 @@ void MapClass::Set_Map_Dimensions(Rect const & rect, bool reset_cells, int cell_
 		cell = (icell - cell) - cellpos;
 
 		cells = cells_base;
+		std::size_t slot_index = 0;
 		while (cellcount > 0) {
 			cptr = cells;
 			Cell scell = cptr->CellID;
@@ -817,11 +822,15 @@ void MapClass::Set_Map_Dimensions(Rect const & rect, bool reset_cells, int cell_
 			CellClass *c = &(*this)[shifted];
 
 			Cell dcell = c->CellID;
-			if (c != NULL) {
+			if (c != NULL && c != &BlubCell) {
 				*c = *cptr;
 				c->Set_CellID(dcell);
+				if (slot_index < shifted_entities.size()) {
+					c->Components.Adopt_Id(shifted_entities[slot_index].Release());
+				}
 			}
 
+			slot_index++;
 			cellcount--;
 			cells++;
 		}
@@ -947,6 +956,7 @@ void MapClass::Set_Map_Dimensions(Rect const & rect, bool reset_cells, int cell_
 		Fresh_Map();
 	}
 
+	BlubCell.Components.Reset();
 	new(&BlubCell) CellClass;
 	delete (void *)cells_base; /// operator delete is called directly here.
 }

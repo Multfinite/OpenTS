@@ -93,6 +93,7 @@ class DriveLocomotionClass : public LocomotionClass, public IPiggyback
 		virtual std::unique_ptr<ILocomotion> End_Piggyback(void) override;
 		virtual bool Is_Ok_To_End(void) override;
 		virtual bool Is_Piggybacking(void) override {return(Piggybacker != nullptr);}
+		virtual ILocomotion * Carried_Locomotor(void) const override {return(Piggybacker.get());}
 
 		/*---------------------------------------------------------------------
 		**	Member function prototypes.

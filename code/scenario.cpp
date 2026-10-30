@@ -95,6 +95,7 @@
 #include "data.h"
 #include "dbgprint.h"
 #include "deploymentconfig.h"
+#include "ec/engine_hooks.h"
 #include "egos.h"
 #include "empulse.h"
 #include "enviro.h"
@@ -996,6 +997,7 @@ void Fill_In_Data(void)
 	if (GasSystem == NULL) {
 		GasSystem = new ParticleSystemClass(ParticleSystemTypes[ParticleSystemTypeClass::From_Name("GasCloudSys")], Cell(10, 10));
 	}
+	EC::Hooks::Scenario_Init_All();
 }
 
 
@@ -1032,6 +1034,7 @@ void Post_Load_Game(void)
 	IonStormClass::Apply_Secondary_Effect(false);
 
 	AnimClass::Post_Load_Game();
+	EC::Hooks::Post_Load_All();
 
 	Map.Flag_To_Redraw(GS_REDRAW_ALL);
 	Main_Window_Request_Repaint();
@@ -1150,6 +1153,7 @@ void Clear_Scenario(void)
 	}
 
 	Scen->UniqueID = 1000 * 1000;
+	EC::Hooks::Scenario_Clear_All();
 
 	Set_Speech_State(true);
 }

@@ -34,6 +34,7 @@
 
 #include "abstract.h"
 #include "coord.h"
+#include "ec/entity.h"
 #include "face.h"
 #include "globals.h"
 #include "point.h"
@@ -199,6 +200,11 @@ class ObjectClass : public AbstractClass
 		**	point. For buildings, it is the upper left corner.
 		*/
 		Coord Position;
+
+		/*
+		 * Lazily materialized component-holder bound to this object.
+		 */
+		EC::TypedEntity<ObjectClass> Components;
 
 		/*-----------------------------------------------------------------------------------
 		**	Constructor & destructors.

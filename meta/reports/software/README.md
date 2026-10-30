@@ -16,3 +16,5 @@ updated: "2026-10-30"
 | Отчёт | Профиль | Вид |
 | --- | --- | --- |
 | [`2026-10-30-hyai-initial-setup.md`](2026-10-30-hyai-initial-setup.md) | `software/architect` | `task` |
+| [`2026-10-30-analysis-ec-flecs.md`](2026-10-30-analysis-ec-flecs.md) | `software/analysis` | `analysis` |
+| [`2026-10-30-static-ec-flecs-implementation.md`](2026-10-30-static-ec-flecs-implementation.md) | `software/code` | `task` |

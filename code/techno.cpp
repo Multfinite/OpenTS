@@ -152,6 +152,7 @@
 #include "builtype.h"
 #include "bullet.h"
 #include "bullettype.h"
+#include "ec/engine_hooks.h"
 #include "ccrand.h"
 #include "cell.h"
 #include "combat.h"
@@ -953,6 +954,7 @@ bool TechnoClass::Revealed(HouseClass * house)
  *=============================================================================================*/
 void TechnoClass::Hidden(void)
 {
+	BASECLASS::Hidden();
 	if (!House->Is_Human_Player()) {
 		Forget_Human_Discovery();
 	}
@@ -3501,6 +3503,8 @@ bool TechnoClass::Select(void)
  *=============================================================================================*/
 FireErrorType TechnoClass::Can_Fire(AbstractClass * target, int which) const
 {
+	FireErrorType verdict = [&]() -> FireErrorType {
+
 	/*
 	**	Don't allow firing if the target is illegal.
 	*/
@@ -3636,6 +3640,10 @@ FireErrorType TechnoClass::Can_Fire(AbstractClass * target, int which) const
 
 CANT_FIRE:
 	return(FIRE_CANT);
+	}();
+
+	EC::Hooks::On_Can_Fire(*this, target, which, verdict);
+	return(verdict);
 }
 
 
@@ -3656,6 +3664,7 @@ CANT_FIRE:
  *=============================================================================================*/
 void TechnoClass::Stun(void)
 {
+	EC::Hooks::On_Stun(*this);
 	Assign_Target(NULL);
 	Assign_Destination(NULL);
 	Transmit_Message(RADIO_OVER_OUT);
@@ -3750,6 +3759,7 @@ void TechnoClass::Assign_Target(AbstractClass * target)
 			ParticleSystems[ATTACHED_PARTICLE_FIRE] = NULL;
 		}
 	}
+	EC::Hooks::On_Assign_Target(*this, TarCom);
 }
 
 
@@ -4220,6 +4230,9 @@ BulletClass * TechnoClass::Fire_At(AbstractClass * target, int which)
 		}
 	}
 
+	if (bullet != NULL) {
+		EC::Hooks::On_Fire_At(*this, target, which, bullet);
+	}
 	return(bullet);
 }
 
@@ -4934,6 +4947,7 @@ bool TechnoClass::Captured(HouseClass * newowner)
 			Radar_Track();
 		}
 
+		EC::Hooks::On_Captured(*this, newowner);
 		return(true);
 	}
 	return(false);
@@ -5420,6 +5434,7 @@ void TechnoClass::Record_The_Kill(TechnoClass * source)
 	**	Since we lost an object, we lose the associated points as well.
 	*/
 	//House->PointTotal -= points;
+	EC::Hooks::On_Record_The_Kill(*this, source);
 }
 
 
@@ -5486,6 +5501,7 @@ void TechnoClass::Do_Uncloak(bool silent)
 		if (!silent) {
 			Sound_Effect(Rule->CloakSound, PositionCoord);
 		}
+		EC::Hooks::On_Do_Uncloak(*this);
 	}
 }
 
@@ -5515,6 +5531,7 @@ void TechnoClass::Do_Cloak(bool silent)
 		if (!silent) {
 			Sound_Effect(Rule->CloakSound, PositionCoord);
 		}
+		EC::Hooks::On_Do_Cloak(*this);
 	}
 }
 
@@ -7498,8 +7515,9 @@ bool TechnoClass::Is_Ready_To_Random_Animate(void) const
  * HISTORY:                                                                                    *
  *   07/24/1995 JLB : Created.                                                                 *
  *=============================================================================================*/
-void TechnoClass::Assign_Destination(AbstractClass *, bool)
+void TechnoClass::Assign_Destination(AbstractClass * dest, bool)
 {
+	EC::Hooks::On_Assign_Destination(*this, dest);
 }
 
 

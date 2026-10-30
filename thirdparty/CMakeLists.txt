@@ -212,6 +212,41 @@ set(SDL_OFFSCREEN OFF CACHE BOOL "" FORCE)
 
 add_subdirectory(SDL)
 
+#
+# ---------------------------------------------------------
+# Flecs (component storage for the static EC layer)
+# ---------------------------------------------------------
+#
+if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/flecs/include/flecs.h")
+    message(FATAL_ERROR
+        "thirdparty/flecs is empty. Fetch the submodules with:\n"
+        "  git submodule update --init --recursive")
+endif()
+
+# Built here so it inherits the static MSVC runtime above and publishes the
+# custom-build configuration macros to every consumer of <flecs.h>. Systems,
+# pipelines, timers, script, and REST addons stay compiled out.
+file(GLOB_RECURSE FLECS_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/flecs/src/*.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/flecs/include/*.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/flecs/include/*.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/flecs/include/*.inl"
+)
+add_library(flecs_static STATIC ${FLECS_SOURCES})
+add_library(flecs::flecs_static ALIAS flecs_static)
+target_include_directories(flecs_static PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/flecs/include")
+target_compile_definitions(flecs_static PUBLIC
+    FLECS_CUSTOM_BUILD
+    FLECS_CPP
+    FLECS_OS_API_IMPL
+    flecs_STATIC
+)
+if(WIN32)
+    target_link_libraries(flecs_static PUBLIC wsock32 ws2_32 dbghelp)
+elseif(UNIX)
+    target_link_libraries(flecs_static PUBLIC pthread)
+endif()
+
 
 #
 # ---------------------------------------------------------

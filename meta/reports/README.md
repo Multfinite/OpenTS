@@ -33,5 +33,7 @@ updated: "2026-10-30"
 | Отчёт | Домен | Профиль | Вид |
 | --- | --- | --- | --- |
 | [`2026-10-30-hyai-initial-setup.md`](software/2026-10-30-hyai-initial-setup.md) | `software` | `software/architect` | `task` |
+| [`2026-10-30-analysis-ec-flecs.md`](software/2026-10-30-analysis-ec-flecs.md) | `software` | `software/analysis` | `analysis` |
+| [`2026-10-30-static-ec-flecs-implementation.md`](software/2026-10-30-static-ec-flecs-implementation.md) | `software` | `software/code` | `task` |
 
 Новый отчёт обязан появиться в этой таблице (`HYAI-ART-13`): `check_report.py` сверяет индекс с файловой системой.

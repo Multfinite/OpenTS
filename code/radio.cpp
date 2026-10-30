@@ -40,6 +40,7 @@
 #include "radio.h"
 
 #include "_rtti.h"
+#include "ec/engine_hooks.h"
 #include "house.h"
 #include "mono.h"
 #include "savestream.h"
@@ -246,6 +247,7 @@ RadioMessageType RadioClass::Transmit_Message(RadioMessageType message, intptr_t
 	*/
 	if (message == RADIO_HELLO) {
 		Transmit_Message(RADIO_OVER_OUT);
+		EC::Hooks::On_Receive_Message(*to, this, message, param);
 		if (to->Receive_Message(Dynamic_Cast<TechnoClass *>(this), message, param) == RADIO_ROGER) {
 			Radio = to;
 			return(RADIO_ROGER);
@@ -253,6 +255,7 @@ RadioMessageType RadioClass::Transmit_Message(RadioMessageType message, intptr_t
 		return(RADIO_NEGATIVE);
 	}
 
+	EC::Hooks::On_Receive_Message(*to, this, message, param);
 	return(to->Receive_Message(Dynamic_Cast<TechnoClass *>(this), message, param));
 }
 

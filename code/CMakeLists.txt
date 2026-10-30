@@ -224,6 +224,7 @@ target_link_libraries(OpenTS PRIVATE
     RmlUi::Core
     imgui
     SDL3::SDL3-static
+    flecs_static
     comctl32
     dbghelp
     iphlpapi

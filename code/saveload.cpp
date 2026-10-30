@@ -71,6 +71,7 @@
 #include "data.h"
 #include "dbgprint.h"
 #include "deploymentconfig.h"
+#include "ec/engine_hooks.h"
 #include "empulse.h"
 #include "enviro.h"
 #include "factory.h"
@@ -339,6 +340,8 @@ CRCEngine Object_CRCs(void)
 
 #undef DO_OBJ_CRC
 
+	EC::Hooks::Compute_Cell_CRCs(crc);
+
 	if (PlayerPtr != NULL) {
 		crc(PlayerPtr->HeapID);
 	}
@@ -385,6 +388,8 @@ void Print_Heap_CRCs(FILE * fp)
 	OBJECT_HEAP_LIST_INSTANCES(HEAP_ROWS)
 
 #undef HEAP_ROWS
+
+	EC::Hooks::Print_Component_CRCs(fp);
 }
 
 /***********************************************************************************************
@@ -729,6 +734,11 @@ static bool Put_All(SaveStreamClass & stream, int save_net)
 		}
 	}
 
+	if (!EC::Hooks::Save_Trailer(stream)) {
+		DebugString("\t***** FAILED WRITING EC TRAILER!\n");
+		return(false);
+	}
+
 	return(!stream.Was_Error());
 }
 
@@ -979,6 +989,11 @@ static bool Get_All(SaveStreamClass & stream, bool save_net)
 			DebugString("\t***** FAILED!\n");
 			return(false);
 		}
+	}
+
+	if (!EC::Hooks::Load_Trailer(stream)) {
+		DebugString("\t***** FAILED READING EC TRAILER!\n");
+		return(false);
 	}
 
 	Map.Flag_To_Redraw(GS_REDRAW_ALL);

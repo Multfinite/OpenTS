@@ -106,6 +106,24 @@ SwizzleIDType SwizzleManagerClass::ID_Of(void const * pointer)
 
 
 /// <summary>
+/// Fetches the identity already assigned to a pointer during the current save, or zero
+/// if the object was never written out as a base record.
+/// </summary>
+SwizzleIDType SwizzleManagerClass::Registered_ID_Of(void const * pointer) const
+{
+	if (pointer == nullptr) {
+		return(0);
+	}
+
+	auto found = IDTable.find(pointer);
+	if (found != IDTable.end()) {
+		return(found->second);
+	}
+	return(0);
+}
+
+
+/// <summary>
 /// Registers a saved pointer to be resolved later.
 /// The load code calls this routine for every pointer it reads back, since the value on
 /// disk is a swizzle ID rather than an address. The request is remembered and the pointer
@@ -144,6 +162,34 @@ void SwizzleManagerClass::Swizzle(void ** pointer, SwizzleIDType id, char const 
 void SwizzleManagerClass::Here_I_Am(SwizzleIDType id, void * pointer)
 {
 	PointerTable.emplace_back(id, pointer);
+}
+
+
+/// <summary>
+/// Sorts the announced pointer table so loaded base objects can be looked up by their
+/// swizzle identity while trailing save sections are being read.
+/// </summary>
+void SwizzleManagerClass::Prepare_Address_Lookup(void)
+{
+	std::sort(PointerTable.begin(), PointerTable.end(),
+		[](SwizzlePointerClass const & left, SwizzlePointerClass const & right) { return(left.ID < right.ID); });
+}
+
+
+/// <summary>
+/// Fetches the loaded address announced for a swizzle identity after Prepare_Address_Lookup.
+/// </summary>
+void * SwizzleManagerClass::Address_Of(SwizzleIDType id) const
+{
+	if (id == 0) {
+		return(nullptr);
+	}
+	auto entry = std::lower_bound(PointerTable.begin(), PointerTable.end(), id,
+		[](SwizzlePointerClass const & left, SwizzleIDType target) { return(left.ID < target); });
+	if (entry != PointerTable.end() && entry->ID == id) {
+		return(entry->Pointer);
+	}
+	return(nullptr);
 }
 
 

@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import argparse
+import configparser
 import json
 import subprocess
 import sys
@@ -18,6 +19,20 @@ from pathlib import Path
 import yaml
 
 SKIP_PARTS = {".git", "__pycache__", "node_modules", ".venv", "venv", "dist", "build"}
+
+
+def git_submodule_roots(root: Path) -> set[str]:
+    roots: set[str] = set()
+    gitmodules = root / ".gitmodules"
+    if not gitmodules.exists():
+        return roots
+    parser = configparser.ConfigParser()
+    parser.read(gitmodules, encoding="utf-8")
+    for section in parser.sections():
+        sub_path = parser.get(section, "path", fallback="").strip().strip("/")
+        if sub_path:
+            roots.add(sub_path)
+    return roots
 
 
 def modified_since_base(root: Path, base: str) -> set[str]:
@@ -57,7 +72,8 @@ def main() -> int:
     touched = modified_since_base(root, base)
 
     fw_prefix = str(((man.get("framework") or {}).get("prefix")) or "HYAI/HYAI/").strip("/")
-    sub_root = str(((man.get("framework") or {}).get("root")) or "HYAI/").strip("/")
+    sub_roots = git_submodule_roots(root)
+    sub_roots.add(str(((man.get("framework") or {}).get("root")) or "HYAI/").strip("/"))
     ws_engine = root / fw_prefix / "tools" / "whitespace.py"
     if not ws_engine.exists():
         print(f"движок не найден: {ws_engine}", file=sys.stderr)
@@ -71,7 +87,7 @@ def main() -> int:
         parts = Path(rel).parts
         if any(p in SKIP_PARTS for p in parts):
             continue
-        if rel == sub_root or rel.startswith(sub_root + "/"):
+        if any(rel == sr or rel.startswith(sr + "/") for sr in sub_roots if sr):
             continue
         if rel in exempt and rel not in touched:
             continue

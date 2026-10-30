@@ -36,6 +36,11 @@ struct IPiggyback
 	 * Is it currently piggy backing another locomotor?
 	 */
 	virtual bool Is_Piggybacking(void) = 0;
+
+	/*
+	 * Returns the currently carried locomotor without releasing ownership, or nullptr.
+	 */
+	virtual ILocomotion * Carried_Locomotor(void) const = 0;
 };
 
 

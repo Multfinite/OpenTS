@@ -72,6 +72,7 @@
 #include "drive.h"
 #include "droppod.h"
 #include "dsurface.h"
+#include "ec/engine_hooks.h"
 #include "empulse.h"
 #include "except.h"
 #include "factory.h"
@@ -997,6 +998,7 @@ void __cdecl Prog_End(void)
 		Scen = NULL;
 	}
 
+	EC::Hooks::Shutdown_World();
 	Unregister_Classes();
 
 	if (LanguageResources) {

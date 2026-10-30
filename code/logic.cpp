@@ -49,6 +49,7 @@
 #include "blight.h"
 #include "building.h"
 #include "bullet.h"
+#include "ec/engine_hooks.h"
 #include "empulse.h"
 #include "factory.h"
 #include "globals.h"
@@ -356,6 +357,7 @@ void LogicClass::AI(void)
 	/*
 	**	AI for all sentient objects is processed.
 	*/
+	EC::Hooks::AI_All();
 	for (index = 0; index < Count(); index++) {
 		ObjectClass * obj = (*this)[index];
 
@@ -371,6 +373,7 @@ void LogicClass::AI(void)
 		//	index--;
 		//}
 	}
+	EC::Hooks::PostAI_All();
 //	HouseClass::Recalc_Attributes();
 
 	if (Session.Type != GAME_NORMAL && Session.Type != GAME_SKIRMISH) {
@@ -437,11 +440,14 @@ void LogicClass::Environment_AI(void)
 
 	Map.Ice_Solidification_AI();
 	Map.Terrain_Deformation_AI();
+	EC::Hooks::Environment_AI_All();
 
 	for (int index = 0; index < Count(); index++) {
 		FootClass *foot = (FootClass *)(*this)[index];
 		if (foot->Is_Foot() && foot->Locomotion != NULL && !foot->IsSinking) {
-			foot->Locomotion->Process();
+			EC::Hooks::On_Loco_Process(*foot->Locomotion);
+			bool const moving = foot->Locomotion->Process();
+			EC::Hooks::On_Loco_PostProcess(*foot->Locomotion, moving);
 		}
 	}
 }

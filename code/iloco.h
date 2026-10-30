@@ -10,6 +10,7 @@
 #pragma once
 
 #include "coord.h"
+#include "ec/entity.h"
 #include "face.h"
 #include "matrix3d.h"
 #include "point.h"
@@ -259,4 +260,10 @@ struct ILocomotion
 	 * Queries internal variables
 	 */
 	virtual int Get_Speed_Accum(void) = 0;
+
+	/*
+	 * Lazily materialized component-holder bound to this locomotor.
+	 */
+	virtual EC::TypedEntity<LocomotionClass> & Components(void) noexcept = 0;
+	virtual EC::TypedEntity<LocomotionClass> const & Components(void) const noexcept = 0;
 };

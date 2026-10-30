@@ -34,6 +34,7 @@
 
 #include "_map.h"
 #include "abstract.h"
+#include "ec/entity.h"
 #include "globals.h"
 #include "houseset.h"
 #include "map.h"
@@ -522,6 +523,12 @@ class CellClass : public AbstractClass
 
 		virtual void Serialize(SaveStreamClass & stream) override;
 		virtual void Post_Load(void) override;
+		virtual void Compute_CRC(CRCEngine & crc) const override;
+
+		/*
+		 * Lazily materialized component-holder bound to this cell.
+		 */
+		EC::TypedEntity<CellClass> Components;
 
 		virtual int What_Am_I(void) const override;
 

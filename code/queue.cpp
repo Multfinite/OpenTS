@@ -97,6 +97,7 @@
 #include "blight.h"
 #include "building.h"
 #include "builtype.h"
+#include "ec/engine_hooks.h"
 #include "bullet.h"
 #include "bullettype.h"
 #include "cell.h"
@@ -3769,6 +3770,7 @@ static void Compute_Game_CRC(void)
 	//	A random #
 	//------------------------------------------------------------------------
 	Add_CRC(&GameCRC, Scen->RandomNumber);
+	EC::Hooks::Accumulate_Game_CRC(GameCRC);
 
 }	/* end of Compute_Game_CRC */
 

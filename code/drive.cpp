@@ -74,6 +74,7 @@
 #include "unit.h"
 #include "unittype.h"
 #include "wave.h"
+#include "ec/engine_hooks.h"
 
 #include "layer.hh"
 #include "tube.hh"
@@ -165,6 +166,9 @@ void DriveLocomotionClass::Serialize(SaveStreamClass & stream)
 			Save_Object(stream, Piggybacker.get());
 		} else {
 			Piggybacker = Load_Locomotor(stream);
+			if (Piggybacker != nullptr) {
+				Piggybacker->Components().Set_Disabled(true);
+			}
 		}
 	}
 	// TrackControl -- constant tables shared by every driver.
@@ -186,6 +190,7 @@ bool DriveLocomotionClass::Begin_Piggyback(std::unique_ptr<ILocomotion> & carrie
 		return(false);
 	}
 	Piggybacker = std::move(carried);
+	EC::Hooks::On_Begin_Piggyback(*this, Piggybacker.get());
 	return(true);
 }
 
@@ -198,7 +203,11 @@ bool DriveLocomotionClass::Begin_Piggyback(std::unique_ptr<ILocomotion> & carrie
 /// <returns>Returns with the locomotor that was riding, or nothing when none was.</returns>
 std::unique_ptr<ILocomotion> DriveLocomotionClass::End_Piggyback(void)
 {
-	return(std::move(Piggybacker));
+	std::unique_ptr<ILocomotion> restored = std::move(Piggybacker);
+	if (restored != nullptr) {
+		EC::Hooks::On_End_Piggyback(*this, restored.get());
+	}
+	return(restored);
 }
 
 

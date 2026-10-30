@@ -16,6 +16,7 @@
 #include "cell.h"
 #include "classfactory.h"
 #include "coord.h"
+#include "ec/engine_hooks.h"
 #include "foot.h"
 #include "globals.h"
 #include "map.h"
@@ -43,7 +44,8 @@
 LocomotionClass::LocomotionClass(void) :
 	LinkedTo(NULL),
 	IsPowered(true),
-	Dirty(true)
+	Dirty(true),
+	CompHolder(this)
 {
 }
 
@@ -53,6 +55,7 @@ LocomotionClass::LocomotionClass(void) :
 /// </summary>
 LocomotionClass::~LocomotionClass(void)
 {
+	CompHolder.Reset();
 	LinkedTo = NULL;
 }
 
@@ -66,6 +69,10 @@ LocomotionClass::~LocomotionClass(void)
 void LocomotionClass::Link_To_Object(void *pointer)
 {
 	LinkedTo = (FootClass *)pointer;
+	if (LinkedTo != NULL) {
+		CompHolder.Set_Disabled(LinkedTo->IsInLimbo);
+	}
+	EC::Hooks::On_Link_To_Object(*this, LinkedTo);
 }
 
 
@@ -88,6 +95,7 @@ Matrix3D LocomotionClass::Draw_Matrix(int *key)
 		*key *= 32;
 		*key |= LinkedTo->PrimaryFacing.Current().As_Dir32();
 	}
+	EC::Hooks::On_Draw_Matrix(*this, draw_matrix, key);
 	return(draw_matrix);
 }
 
@@ -141,6 +149,7 @@ Point2D LocomotionClass::Shadow_Point(void)
 bool LocomotionClass::Power_On(void)
 {
 	IsPowered = true;
+	EC::Hooks::On_Power_On(*this);
 	return(Is_Powered());
 }
 
@@ -154,6 +163,7 @@ bool LocomotionClass::Power_On(void)
 bool LocomotionClass::Power_Off(void)
 {
 	IsPowered = false;
+	EC::Hooks::On_Power_Off(*this);
 	return(Is_Powered());
 }
 
@@ -422,6 +432,7 @@ void LocomotionClass::Force_Track(int track, Coord coord)
 /// </summary>
 void LocomotionClass::Unlimbo(void)
 {
+	EC::Hooks::On_Loco_Unlimbo(*this);
 }
 
 
@@ -442,6 +453,7 @@ void LocomotionClass::Do_Turn(DirType coord)
 /// </summary>
 void LocomotionClass::Stop_Moving(void)
 {
+	EC::Hooks::On_Stop_Moving(*this);
 }
 
 
@@ -452,6 +464,7 @@ void LocomotionClass::Stop_Moving(void)
 /// </summary>
 void LocomotionClass::Move_To(Coord to)
 {
+	EC::Hooks::On_Move_To(*this, to);
 }
 
 

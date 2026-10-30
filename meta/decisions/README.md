@@ -5,7 +5,7 @@ type: meta
 status: approved
 authority: contract
 visibility: internal
-version: "1.0"
+version: "1.1"
 updated: "2026-10-30"
 ---
 
@@ -28,6 +28,7 @@ updated: "2026-10-30"
 | ID | Область | Название | Статус |
 | --- | --- | --- | --- |
 | [`P-0001`](project/P-0001-hyai-contracts-and-clean-export.md) | project | Приоритет контрактов HYAI и правило чистого экспорта ветки | approved |
+| [`SW-0001`](software/SW-0001-static-ec-flecs-architecture.md) | software | Статически типизированная EC-система на базе `flecs` (без ECS-систем) | approved |
 
 ## Правила
 

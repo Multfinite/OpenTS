@@ -112,6 +112,7 @@
 #include "cell.h"
 #include "combat.h"
 #include "conquer.h"
+#include "ec/engine_hooks.h"
 #include "foot.h"
 #include "infantry.h"
 #include "infatype.h"
@@ -173,8 +174,10 @@ ObjectClass::ObjectClass(void) :
 	Next(NULL),
 	Tag(NULL),
 	Strength(255),
-	Position(COORD_NONE)
+	Position(COORD_NONE),
+	Components(this)
 {
+	Components.Set_Disabled(true);
 	Objects.Add(this);
 	ObjectPtrTracker.Add(this);
 	AbstractTypePtrTracker.Add(this);
@@ -189,6 +192,7 @@ ObjectClass::ObjectClass(void) :
 /// </summary>
 ObjectClass::~ObjectClass(void)
 {
+	Components.Reset();
 	AmbientSounds.Detach(this);
 	ObjectsToDelete.Delete(this);
 	Objects.Delete(this);
@@ -639,6 +643,7 @@ int ObjectClass::Exit_Object(TechnoClass *)
 void ObjectClass::Hidden(void)
 {
 	assert(this != NULL);
+	EC::Hooks::On_Hidden(*this);
 }
 
 
@@ -1021,6 +1026,7 @@ void ObjectClass::Unselect(void)
 		if (Map.Object_To_Follow() == this) {
 			Map.Set_To_Follow(NULL);
 		}
+		EC::Hooks::On_Unselect(*this);
 	}
 }
 
@@ -1082,6 +1088,7 @@ bool ObjectClass::Select(void)
 	}
 
 	IsSelected = true;
+	EC::Hooks::On_Select(*this);
 
 	return(true);
 }
@@ -1207,6 +1214,7 @@ bool ObjectClass::Render(Rect & cliprect, bool forced, bool extras_only) const
 			**	Draw the object itself
 			*/
 			Draw_It(point, cliprect);
+			EC::Hooks::On_Draw_It(*this, point, cliprect);
 
 			return(true);
 		}
@@ -1354,6 +1362,7 @@ bool ObjectClass::Limbo(void)
 		Hidden();
 		IsInLimbo = true;
 		IsToDisplay = false;
+		EC::Hooks::On_Limbo(*this);
 		return(true);
 	}
 	return(false);
@@ -1379,7 +1388,7 @@ bool ObjectClass::Limbo(void)
  *   09/24/1994 JLB : Created.                                                                 *
  *   12/23/1994 JLB : Sets object strength.                                                    *
  *=============================================================================================*/
-bool ObjectClass::Unlimbo(Coord const & coord, Dir256 )
+bool ObjectClass::Unlimbo(Coord const & coord, Dir256 dir)
 {
 	assert(this != NULL);
 
@@ -1440,6 +1449,7 @@ bool ObjectClass::Unlimbo(Coord const & coord, Dir256 )
 							}
 						}
 					}
+					EC::Hooks::On_Unlimbo(*this, ucoord, dir);
 				}
 				return(true);
 			} else {
@@ -1483,6 +1493,7 @@ void ObjectClass::Detach(AbstractClass const * target, bool all)
 			}
 		}
 	}
+	EC::Hooks::On_Object_Detach(*this, target, all);
 }
 
 
@@ -1633,6 +1644,7 @@ ResultType ObjectClass::Take_Damage(int & damage, int distance, WarheadTypeClass
 		if (!forced) {
 			damage = Modify_Damage(damage, warhead, Class_Of()->Armor, distance);
 		}
+		EC::Hooks::On_Take_Damage(*this, damage, distance, warhead, source, forced);
 		if (damage == 0) return(RESULT_NONE);
 
 		/*
@@ -1894,7 +1906,11 @@ bool ObjectClass::Revealed(HouseClass * house)
 {
 	assert(this != NULL);
 
-	return(house != NULL);
+	if (house != NULL) {
+		EC::Hooks::On_Revealed(*this, house);
+		return(true);
+	}
+	return(false);
 }
 
 
@@ -2071,6 +2087,10 @@ void ObjectClass::Serialize(SaveStreamClass & stream)
 	stream.Serialize(Layer);
 	stream.Serialize(IsSubmittedToLayer);
 	stream.Serialize(Position);
+
+	if (stream.Is_Loading()) {
+		Components.Set_Disabled(IsInLimbo);
+	}
 }
 
 
@@ -2274,6 +2294,7 @@ void ObjectClass::Compute_CRC(CRCEngine & crc) const
 	crc(Position.X);
 	crc(Position.Y);
 	crc(Position.Z);
+	EC::Hooks::Compute_Object_CRC(*this, crc);
 }
 
 
@@ -2437,6 +2458,7 @@ void ObjectClass::Delete_Me(void)
 	assert(this != NULL);
 //	//assert(IsActive);
 
+	EC::Hooks::On_Delete_Me(*this);
 	Detach_This_From_All(this);
 	Limbo();
 	IsActive = false;
@@ -2562,7 +2584,11 @@ void ObjectClass::Set_Coord(Coord const & coord)
 {
 	assert(this != NULL);
 
+	Coord const old_coord = Position;
 	Position = coord;
+	if (old_coord != coord) {
+		EC::Hooks::On_Set_Coord(*this, old_coord, coord);
+	}
 }
 
 
