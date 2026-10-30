@@ -4931,6 +4931,7 @@ bool TechnoClass::Captured(HouseClass * newowner)
 		/*
 		**	Change ownership now.
 		*/
+		HouseClass * oldowner = House;
 		House = newowner;
 		IsOwnedByPlayer = (House == PlayerPtr);
 
@@ -4947,7 +4948,7 @@ bool TechnoClass::Captured(HouseClass * newowner)
 			Radar_Track();
 		}
 
-		EC::Hooks::On_Captured(*this, newowner);
+		EC::Hooks::On_Captured(*this, oldowner, newowner);
 		return(true);
 	}
 	return(false);

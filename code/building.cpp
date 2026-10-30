@@ -131,6 +131,7 @@
 #include "draw.h"
 #include "drive.h"
 #include "dsurface.h"
+#include "ec/engine_hooks.h"
 #include "event.h"
 #include "factory.h"
 #include "fog.h"
@@ -266,10 +267,7 @@ BuildingClass::BuildingClass(BuildingTypeClass const * type, HouseClass * house)
 	TranslucencyLevel(0),
 	Brightness(NORMAL_LIGHT),
 	UpgradeLevel(0),
-	GateFrame(-1),
-	ProduceCashTimer(0),
-	ProduceCashRemaining(0),
-	IsProduceCashStartupPaid(false)
+	GateFrame(-1)
 {
 	Create_ID();
 
@@ -297,6 +295,9 @@ BuildingClass::BuildingClass(BuildingTypeClass const * type, HouseClass * house)
 			UnitRepairFacilities.Add(this);
 		}
 		IsCloakable = Class->IsCloakable;
+		if (!Class->IsWall && Class->PowersUpBuilding.empty() && Class->Has_Produce_Cash()) {
+			EC::Hooks::Ensure_Produce_Cash(*this);
+		}
 	}
 }
 
@@ -1736,8 +1737,6 @@ void BuildingClass::AI(void)
 	if (Class->ToBuild != RTTI_NONE) {
 		Factory_AI();
 	}
-
-	Produce_Cash_AI();
 
 	/*
 	**	Check for demolition timeout. When timeout has expired, the building explodes.
@@ -3746,11 +3745,12 @@ void BuildingClass::Grand_Opening(bool captured)
 			IsReadyToCommence = true;
 		}
 
-		// The budget test reads HasOpened, so it must run before it is set below.
-		if (!HasOpened || (captured && Class->IsProduceCashResetOnCapture)) {
-			ProduceCashRemaining = (Class->ProduceCashBudget > 0) ? Class->ProduceCashBudget : -1;
+		// Grand_Opening hooks run before HasOpened is set so components can distinguish
+		// first opening from subsequent openings on capture.
+		if (Class != NULL && Class->Has_Produce_Cash()) {
+			EC::Hooks::Ensure_Produce_Cash(*this);
 		}
-		ProduceCashTimer = Class->ProduceCashDelay;
+		EC::Hooks::On_Grand_Opening(*this, captured);
 
 		House->IsRecalcNeeded = true;
 
@@ -4462,11 +4462,7 @@ bool BuildingClass::Captured(HouseClass * newowner)
 
 		IsRepairing = false;
 		Grand_Opening(true);
-
-		// The bonus is decided by the house the building came from, not by its new owner.
-		if (oldowner->Class->IsMultiplayPassive) {
-			Produce_Cash_Startup();
-		}
+		EC::Hooks::On_Captured(*this, oldowner, newowner);
 
 		if (Class->IsLaserFencePost) {
 			Init_Laser_Fence();
@@ -7561,89 +7557,6 @@ void BuildingClass::Repair_AI(void)
 }
 
 
-/// <summary>
-/// Pays this building's owner the cash its type produces, once the interval has run out.
-/// A building pays only while it is open for business, not being sold, and, if it runs on
-/// power, supplied with all of it.
-/// </summary>
-void BuildingClass::Produce_Cash_AI(void)
-{
-	if (!HasOpened || Class->ProduceCashDelay <= 0 || ProduceCashRemaining == 0) {
-		return;
-	}
-
-	// The most negative amount cannot be negated for the drain path.
-	int amount = Class->ProduceCashAmount;
-	if (amount == 0 || amount == std::numeric_limits<int>::min()) {
-		return;
-	}
-
-	if (Mission == MISSION_DECONSTRUCTION || MissionQueue == MISSION_DECONSTRUCTION) {
-		return;
-	}
-
-	if (House->Class->IsMultiplayPassive) {
-		return;
-	}
-
-	// The house's supply is consulted even for a building that drains none of it.
-	if (Class->IsPowered && (!Is_Powered_On() || House->Power_Fraction() < 1.0)) {
-		ProduceCashTimer.Stop();
-		return;
-	}
-	ProduceCashTimer.Start();
-
-	if (ProduceCashTimer != 0) {
-		return;
-	}
-	ProduceCashTimer = Class->ProduceCashDelay;
-
-	// Clamping lands the budget exactly on zero, so the last installment is paid in full.
-	if (ProduceCashRemaining > 0) {
-		amount = std::clamp(amount, -ProduceCashRemaining, ProduceCashRemaining);
-	}
-
-	// A payment the credits cannot hold is refused rather than charged against the budget.
-	if (amount > 0 && House->Credits > std::numeric_limits<int>::max() - amount) {
-		return;
-	}
-
-	if (ProduceCashRemaining > 0) {
-		ProduceCashRemaining -= (amount < 0) ? -amount : amount;
-	}
-
-	if (amount > 0) {
-		House->Refund_Money(amount);
-	} else {
-		House->Spend_Money(-amount);
-	}
-}
-
-
-/// <summary>
-/// Pays this building's current owner the capture bonus its type grants.
-/// The caller decides whether the house the building came from qualifies. A type granting the
-/// bonus once will not grant it again, and a house outside the contest is paid nothing.
-/// </summary>
-void BuildingClass::Produce_Cash_Startup(void)
-{
-	if (Class->ProduceCashStartup <= 0 || House->Class->IsMultiplayPassive) {
-		return;
-	}
-
-	if (Class->IsProduceCashStartupOneTime && IsProduceCashStartupPaid) {
-		return;
-	}
-
-	if (House->Credits > std::numeric_limits<int>::max() - Class->ProduceCashStartup) {
-		return;
-	}
-
-	IsProduceCashStartupPaid = true;
-	House->Refund_Money(Class->ProduceCashStartup);
-}
-
-
 /***********************************************************************************************
  * BuildingClass::Animation_AI -- Handles normal building animation processing.                *
  *                                                                                             *
@@ -9012,9 +8925,6 @@ void BuildingClass::Serialize(SaveStreamClass & stream)
 	stream.Serialize(Brightness);
 	stream.Serialize(UpgradeLevel);
 	stream.Serialize(GateFrame);
-	stream.Serialize(ProduceCashTimer);
-	stream.Serialize(ProduceCashRemaining);
-	stream.Serialize(IsProduceCashStartupPaid);
 }
 
 
@@ -9090,9 +9000,6 @@ void BuildingClass::Compute_CRC(CRCEngine & crc) const
 	crc(IsDamagedAnims);
 	crc(Brightness);
 	crc(UpgradeLevel);
-	crc((int)ProduceCashTimer);
-	crc(ProduceCashRemaining);
-	crc(IsProduceCashStartupPaid);
 }
 
 

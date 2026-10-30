@@ -289,6 +289,8 @@ struct ComponentRegistry<>
 	template<typename OwnerT, typename... Args>
 	static void Dispatch_Revealed(OwnerT &, Args &&...) noexcept {}
 	template<typename OwnerT, typename... Args>
+	static void Dispatch_Grand_Opening(OwnerT &, Args &&...) noexcept {}
+	template<typename OwnerT, typename... Args>
 	static void Dispatch_Draw_Pre_Render(OwnerT const &, Args &&...) noexcept {}
 	template<typename OwnerT, typename... Args>
 	static void Dispatch_Draw_It(OwnerT const &, Args &&...) noexcept {}
@@ -393,6 +395,12 @@ struct ComponentRegistry<Head, Tail...>
 			world.query_builder<Head>().query_flags(ExtraQueryFlags).each([](flecs::entity fe, Head & comp) { \
 				comp.MethodName(EntityView(static_cast<std::uint64_t>(fe.id()))); \
 			}); \
+		} else if constexpr (ConceptPrefix##DerivedOwner<Head>) { \
+			using SubOwnerT = typename Head::OwnerType; \
+			world.query_builder<OwnerLink<ObjectClass> const, Head>().query_flags(ExtraQueryFlags).each( \
+				[](OwnerLink<ObjectClass> const & link, Head & comp) { \
+					if (link.ptr != nullptr) comp.MethodName(static_cast<SubOwnerT &>(*link.ptr)); \
+				}); \
 		} else { \
 			if constexpr (ConceptPrefix##Root<Head, ObjectClass>) { \
 				world.query_builder<OwnerLink<ObjectClass> const, Head>().query_flags(ExtraQueryFlags).each( \
@@ -427,6 +435,12 @@ struct ComponentRegistry<Head, Tail...>
 			world.query_builder<Head const>().each([](flecs::entity fe, Head const & comp) { \
 				comp.MethodName(EntityView(static_cast<std::uint64_t>(fe.id()))); \
 			}); \
+		} else if constexpr (ConceptPrefix##DerivedOwner<Head>) { \
+			using SubOwnerT = typename Head::OwnerType; \
+			world.query_builder<OwnerLink<ObjectClass> const, Head const>().each( \
+				[](OwnerLink<ObjectClass> const & link, Head const & comp) { \
+					if (link.ptr != nullptr) comp.MethodName(static_cast<SubOwnerT const &>(*link.ptr)); \
+				}); \
 		} else { \
 			if constexpr (ConceptPrefix##Root<Head, ObjectClass>) { \
 				world.query_builder<OwnerLink<ObjectClass> const, Head const>().each( \
@@ -1001,7 +1015,43 @@ struct ComponentRegistry<Head, Tail...>
 	OPENTS_EC_IMPL_CONST_ENTITY_DISPATCH(Dispatch_Can_Fire, HasCanFire, Can_Fire)                   // E06a
 	OPENTS_EC_IMPL_MUT_ENTITY_DISPATCH(Dispatch_Fire_At, HasFireAt, Fire_At)                        // E06b
 	OPENTS_EC_IMPL_MUT_ENTITY_DISPATCH(Dispatch_Record_The_Kill, HasRecordTheKill, Record_The_Kill) // E07
-	OPENTS_EC_IMPL_MUT_ENTITY_DISPATCH(Dispatch_Captured, HasCaptured, Captured)                    // E08
+
+	// E08: Captured supports both (self, oldowner, newowner) and 1-arg (self, newowner)
+	template<typename OwnerT, typename HouseT>
+	static void Dispatch_Captured(OwnerT & owner, HouseT * oldowner, HouseT * newowner)
+	{
+		auto & holder = Detail::Holder_Of(owner);
+		if (!holder.Is_Materialized() || !Is_World_Alive()) {
+			return;
+		}
+		if constexpr (
+			HasCapturedWithSelf<Head, OwnerT, HouseT *, HouseT *> ||
+			HasCapturedNoSelf<Head, HouseT *, HouseT *> ||
+			HasCapturedWithSelf<Head, OwnerT, HouseT *> ||
+			HasCapturedNoSelf<Head, HouseT *>
+		) {
+			flecs::entity fe(World(), static_cast<flecs::entity_t>(holder.Id()));
+			if (Head * comp = fe.try_get_mut<Head>(); comp != nullptr) {
+				if constexpr (HasCapturedWithSelf<Head, OwnerT, HouseT *, HouseT *>) {
+					comp->Captured(owner, oldowner, newowner);
+				} else if constexpr (HasCapturedNoSelf<Head, HouseT *, HouseT *>) {
+					comp->Captured(oldowner, newowner);
+				} else if constexpr (HasCapturedWithSelf<Head, OwnerT, HouseT *>) {
+					comp->Captured(owner, newowner);
+				} else {
+					comp->Captured(newowner);
+				}
+			}
+		}
+		Next::Dispatch_Captured(owner, oldowner, newowner);
+	}
+
+	template<typename OwnerT, typename HouseT>
+	static void Dispatch_Captured(OwnerT & owner, HouseT * newowner)
+	{
+		Dispatch_Captured(owner, static_cast<HouseT *>(nullptr), newowner);
+	}
+
 	OPENTS_EC_IMPL_MUT_ENTITY_DISPATCH(Dispatch_Assign_Target, HasAssignTarget, Assign_Target)      // E09a
 	OPENTS_EC_IMPL_MUT_ENTITY_DISPATCH(Dispatch_Assign_Destination, HasAssignDestination, Assign_Destination) // E09b
 	OPENTS_EC_IMPL_MUT_ENTITY_DISPATCH(Dispatch_Set_Coord, HasSetCoord, Set_Coord)                  // E10
@@ -1014,6 +1064,7 @@ struct ComponentRegistry<Head, Tail...>
 	OPENTS_EC_IMPL_MUT_ENTITY_DISPATCH(Dispatch_Unselect, HasUnselect, Unselect)                    // E14b
 	OPENTS_EC_IMPL_MUT_ENTITY_DISPATCH(Dispatch_Hidden, HasHidden, Hidden)                          // E15a
 	OPENTS_EC_IMPL_MUT_ENTITY_DISPATCH(Dispatch_Revealed, HasRevealed, Revealed)                    // E15b
+	OPENTS_EC_IMPL_MUT_ENTITY_DISPATCH(Dispatch_Grand_Opening, HasGrandOpening, Grand_Opening)      // E15c
 	OPENTS_EC_IMPL_CONST_ENTITY_DISPATCH(Dispatch_Draw_Pre_Render, HasDrawPreRender, Draw_Pre_Render) // E16a
 	OPENTS_EC_IMPL_CONST_ENTITY_DISPATCH(Dispatch_Draw_It, HasDrawIt, Draw_It)                      // E16b
 	OPENTS_EC_IMPL_CONST_ENTITY_DISPATCH(Dispatch_Draw_Post_Render, HasDrawPostRender, Draw_Post_Render) // E16c

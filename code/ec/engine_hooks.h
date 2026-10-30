@@ -35,6 +35,7 @@ class AbstractClass;
 class ObjectClass;
 class TechnoClass;
 class FootClass;
+class BuildingClass;
 class CellClass;
 struct ILocomotion;
 class LocomotionClass;
@@ -47,6 +48,12 @@ class SaveStreamClass;
 class CRCEngine;
 
 namespace EC::Hooks {
+
+// ---------------------------------------------------------------------------
+// Component Attachment Helpers (<flecs.h>-free facade for legacy TUs)
+// ---------------------------------------------------------------------------
+
+void Ensure_Produce_Cash(BuildingClass & self);
 
 // ---------------------------------------------------------------------------
 // Global Lifecycle, Frame, Render, Save/Load, and Sync Hooks (G01..G12)
@@ -89,7 +96,8 @@ void Dispatch_Take_Damage(ObjectClass & self, int & damage, int distance, Warhea
 void Dispatch_Can_Fire(TechnoClass const & self, AbstractClass * target, int which, FireErrorType & verdict);
 void Dispatch_Fire_At(TechnoClass & self, AbstractClass * target, int which, BulletClass * bullet);
 void Dispatch_Record_The_Kill(TechnoClass & self, TechnoClass * source);
-void Dispatch_Captured(TechnoClass & self, HouseClass * newowner);
+void Dispatch_Captured(TechnoClass & self, HouseClass * oldowner, HouseClass * newowner);
+void Dispatch_Captured(BuildingClass & self, HouseClass * oldowner, HouseClass * newowner);
 void Dispatch_Assign_Target(TechnoClass & self, AbstractClass * target);
 void Dispatch_Assign_Destination(TechnoClass & self, AbstractClass * dest);
 void Dispatch_Set_Coord(ObjectClass & self, Coord const & old_coord, Coord const & new_coord);
@@ -102,6 +110,7 @@ void Dispatch_Select(ObjectClass & self);
 void Dispatch_Unselect(ObjectClass & self);
 void Dispatch_Hidden(ObjectClass & self);
 void Dispatch_Revealed(ObjectClass & self, HouseClass * house);
+void Dispatch_Grand_Opening(BuildingClass & self, bool captured);
 void Dispatch_Draw_Pre_Render(ObjectClass const & self, Point2D const & point, Rect const & cliprect);
 void Dispatch_Draw_It(ObjectClass const & self, Point2D const & point, Rect const & cliprect);
 void Dispatch_Draw_Post_Render(ObjectClass const & self, Point2D const & point, Rect const & cliprect);
@@ -243,10 +252,10 @@ inline void On_Record_The_Kill(TechT & self, TechnoClass * source)
 }
 
 template<typename TechT>
-inline void On_Captured(TechT & self, HouseClass * newowner)
+inline void On_Captured(TechT & self, HouseClass * oldowner, HouseClass * newowner)
 {
 	if (self.Components.Is_Materialized()) {
-		Detail::Dispatch_Captured(self, newowner);
+		Detail::Dispatch_Captured(self, oldowner, newowner);
 	}
 }
 
@@ -343,6 +352,14 @@ inline void On_Revealed(ObjT & self, HouseClass * house)
 {
 	if (self.Components.Is_Materialized()) {
 		Detail::Dispatch_Revealed(self, house);
+	}
+}
+
+template<typename BldT>
+inline void On_Grand_Opening(BldT & self, bool captured)
+{
+	if (self.Components.Is_Materialized()) {
+		Detail::Dispatch_Grand_Opening(self, captured);
 	}
 }
 

@@ -22,6 +22,8 @@
 #include "struct.hh"
 #include "super.hh"
 
+#include <limits>
+
 class OverlayTypeClass;
 class IsometricTileTypeClass;
 class BSurface;
@@ -840,6 +842,12 @@ class BuildingTypeClass : public TechnoTypeClass
 		 */
 		int ProduceCashBudget;
 		bool IsProduceCashResetOnCapture;
+
+		bool Has_Produce_Cash(void) const noexcept
+		{
+			return (ProduceCashDelay > 0 && ProduceCashAmount != 0 && ProduceCashAmount != std::numeric_limits<int>::min())
+				|| ProduceCashStartup > 0;
+		}
 
 		/*
 		 * This is the theater qualified name of the building's shape file, recorded as the

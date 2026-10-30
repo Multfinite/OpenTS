@@ -21,6 +21,10 @@ affects:
   - "code/ec/registry.h"
   - "code/ec/engine_hooks.h"
   - "code/ec/engine_hooks.cpp"
+  - "code/ec/components/produce_cash.h"
+  - "code/builtype.h"
+  - "code/building.h"
+  - "code/building.cpp"
   - "code/swizzle.h"
   - "code/swizzle.cpp"
   - "code/object.h"
@@ -51,6 +55,8 @@ affects:
   - "tests/CMakeLists.txt"
   - "tests/ec/CMakeLists.txt"
   - "tests/ec/ectest.cpp"
+  - "tests/producecash/CMakeLists.txt"
+  - "tests/producecash/producecashtest.cpp"
 supersedes: null
 ---
 

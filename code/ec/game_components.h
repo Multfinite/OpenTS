@@ -13,6 +13,10 @@
 // Every component type listed in GameComponents participates in compile-time
 // hook discovery, dense flecs table iteration, EC01 .SAV serialization, and CRC.
 
+#if !defined(EC_CUSTOM_REGISTRY_COMPONENTS)
+#include "ec/components/produce_cash.h"
+#endif
+
 #include <concepts>
 
 namespace EC {
@@ -36,10 +40,10 @@ using GameComponents = ComponentRegistry<EC_CUSTOM_REGISTRY_COMPONENTS>;
 using RegisteredComponentTypes = Detail::TypeList<EC_CUSTOM_REGISTRY_COMPONENTS>;
 #else
 using GameComponents = ComponentRegistry<
-	// Gameplay component types are listed here in deterministic tick order.
+	ProduceCashComponent
 >;
 using RegisteredComponentTypes = Detail::TypeList<
-	// Keep in sync with GameComponents.
+	ProduceCashComponent
 >;
 #endif
 

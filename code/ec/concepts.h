@@ -22,12 +22,25 @@ class AbstractClass;
 class ObjectClass;
 class TechnoClass;
 class FootClass;
+class BuildingClass;
 class CellClass;
 struct ILocomotion;
 class LocomotionClass;
 class CRCEngine;
 
 namespace EC {
+
+// ---------------------------------------------------------------------------
+// Explicit Subclass / Root Owner Affinity Helpers
+// ---------------------------------------------------------------------------
+
+template<typename C>
+concept HasExplicitOwnerType = requires { typename C::OwnerType; };
+
+template<typename C>
+concept HasDerivedObjectOwner = HasExplicitOwnerType<C> &&
+	std::derived_from<typename C::OwnerType, ObjectClass> &&
+	!std::same_as<typename C::OwnerType, ObjectClass>;
 
 // ---------------------------------------------------------------------------
 // Component SaveName & Compile-Time Type Tagging
@@ -75,10 +88,13 @@ consteval std::uint32_t Component_Type_Tag_32(void) noexcept
 #define OPENTS_EC_DEFINE_MUT_GLOBAL_CONCEPT(ConceptPrefix, MethodName) \
 	template<typename C> concept ConceptPrefix##Void = requires(C & c) { c.MethodName(); }; \
 	template<typename C> concept ConceptPrefix##View = requires(C & c, EntityView v) { c.MethodName(v); }; \
+	template<typename C> concept ConceptPrefix##DerivedOwner = \
+		HasDerivedObjectOwner<C> && requires(C & c, typename C::OwnerType & o) { c.MethodName(o); }; \
 	template<typename C, typename Root> concept ConceptPrefix##Root = \
 		EntityRoot<Root> && requires(C & c, Root & r) { c.MethodName(r); }; \
 	template<typename C> concept Has##ConceptPrefix = \
 		ConceptPrefix##Void<C> || ConceptPrefix##View<C> || \
+		ConceptPrefix##DerivedOwner<C> || \
 		ConceptPrefix##Root<C, ObjectClass> || \
 		ConceptPrefix##Root<C, CellClass> || \
 		ConceptPrefix##Root<C, LocomotionClass>;
@@ -86,10 +102,13 @@ consteval std::uint32_t Component_Type_Tag_32(void) noexcept
 #define OPENTS_EC_DEFINE_CONST_GLOBAL_CONCEPT(ConceptPrefix, MethodName) \
 	template<typename C> concept ConceptPrefix##Void = requires(C const & c) { c.MethodName(); }; \
 	template<typename C> concept ConceptPrefix##View = requires(C const & c, EntityView v) { c.MethodName(v); }; \
+	template<typename C> concept ConceptPrefix##DerivedOwner = \
+		HasDerivedObjectOwner<C> && requires(C const & c, typename C::OwnerType const & o) { c.MethodName(o); }; \
 	template<typename C, typename Root> concept ConceptPrefix##Root = \
 		EntityRoot<Root> && requires(C const & c, Root const & r) { c.MethodName(r); }; \
 	template<typename C> concept Has##ConceptPrefix = \
 		ConceptPrefix##Void<C> || ConceptPrefix##View<C> || \
+		ConceptPrefix##DerivedOwner<C> || \
 		ConceptPrefix##Root<C, ObjectClass> || \
 		ConceptPrefix##Root<C, CellClass> || \
 		ConceptPrefix##Root<C, LocomotionClass>;
@@ -123,6 +142,12 @@ concept HasComputeCRCPlain = requires(C const & c, CRCEngine & crc) {
 	c.Compute_CRC(crc);
 };
 
+template<typename C>
+concept HasComputeCRCDerivedOwner = HasDerivedObjectOwner<C> &&
+	requires(C const & c, CRCEngine & crc, typename C::OwnerType const & o) {
+		c.Compute_CRC(crc, o);
+	};
+
 template<typename C, typename Root>
 concept HasComputeCRCRoot = EntityRoot<Root> && requires(C const & c, CRCEngine & crc, Root const & r) {
 	c.Compute_CRC(crc, r);
@@ -131,6 +156,7 @@ concept HasComputeCRCRoot = EntityRoot<Root> && requires(C const & c, CRCEngine 
 template<typename C>
 concept HasComputeCRC =
 	HasComputeCRCPlain<C> ||
+	HasComputeCRCDerivedOwner<C> ||
 	HasComputeCRCRoot<C, ObjectClass> ||
 	HasComputeCRCRoot<C, CellClass> ||
 	HasComputeCRCRoot<C, LocomotionClass>;
@@ -138,9 +164,6 @@ concept HasComputeCRC =
 // ---------------------------------------------------------------------------
 // Compile-Time Root Affinity Validation (AllowedOnRoot<C, Root>)
 // ---------------------------------------------------------------------------
-
-template<typename C>
-concept HasExplicitOwnerType = requires { typename C::OwnerType; };
 
 template<typename C, EntityRoot Root>
 consteval bool Has_Any_Root_Typed_Hook_For(void) noexcept
@@ -260,6 +283,7 @@ OPENTS_EC_DEFINE_ENTITY_CONCEPT(HasSelect, Select)                           // 
 OPENTS_EC_DEFINE_ENTITY_CONCEPT(HasUnselect, Unselect)                       // E14b
 OPENTS_EC_DEFINE_ENTITY_CONCEPT(HasHidden, Hidden)                           // E15a
 OPENTS_EC_DEFINE_ENTITY_CONCEPT(HasRevealed, Revealed)                       // E15b
+OPENTS_EC_DEFINE_ENTITY_CONCEPT(HasGrandOpening, Grand_Opening)              // E15c (BuildingClass)
 OPENTS_EC_DEFINE_CONST_ENTITY_CONCEPT(HasDrawPreRender, Draw_Pre_Render)     // E16a
 OPENTS_EC_DEFINE_CONST_ENTITY_CONCEPT(HasDrawIt, Draw_It)                    // E16b
 OPENTS_EC_DEFINE_CONST_ENTITY_CONCEPT(HasDrawPostRender, Draw_Post_Render)   // E16c

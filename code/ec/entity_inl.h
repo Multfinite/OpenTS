@@ -96,6 +96,10 @@ void Feed_Component_CRC(C const & comp, flecs::entity fe, CRCEngine & crc)
 			if (auto const * link = fe.try_get<OwnerLink<ObjectClass>>(); link != nullptr && link->ptr != nullptr) {
 				comp.Compute_CRC(crc, *link->ptr);
 			}
+		} else if constexpr (HasComputeCRCDerivedOwner<C>) {
+			if (auto const * link = fe.try_get<OwnerLink<ObjectClass>>(); link != nullptr && link->ptr != nullptr) {
+				comp.Compute_CRC(crc, static_cast<typename C::OwnerType const &>(*link->ptr));
+			}
 		}
 		if constexpr (HasComputeCRCRoot<C, CellClass>) {
 			if (auto const * link = fe.try_get<OwnerLink<CellClass>>(); link != nullptr && link->ptr != nullptr) {

@@ -5,7 +5,7 @@ type: architecture
 status: approved
 authority: contract
 visibility: internal
-version: "1.1"
+version: "1.2"
 updated: "2026-10-30"
 ---
 
@@ -24,10 +24,10 @@ updated: "2026-10-30"
 
 | ID | Инвариант | Чем проверяется |
 | --- | --- | --- |
-| `SW-INV-01` | Границы совместимости: форматы сейвов, сетевых пакетов, детерминизм симуляции и раскладка сериализуемых структур не меняются непреднамеренно (`SW-POL-08`) | `tests/save`, `tests/netpacket`, `tests/syncrec`, `tests/desync`, `tests/ec` + ревью |
+| `SW-INV-01` | Границы совместимости: форматы сейвов, сетевых пакетов, детерминизм симуляции и раскладка сериализуемых структур не меняются непреднамеренно (`SW-POL-08`) | `tests/save`, `tests/netpacket`, `tests/syncrec`, `tests/desync`, `tests/ec`, `tests/producecash` + ревью |
 | `SW-INV-02` | Новые модули не вводят скрытого неконтролируемого глобального состояния поверх унаследованного ядра и поддерживают пошаговую миграцию к entity-component (`SW-POL-09`, `[И] docs/DIRECTION.md`) | ревью + модульные тесты `tests/` |
 | `SW-INV-03` | Продуктовый код и коммиты при экспорте не содержат зависимостей и маркеров `HYAI` (`PRJ-POL-01..06`, `P-0001`) `[А]` | `python3 tools/export_branch.py verify` |
-| `SW-INV-04` | Слой EC (`code/ec/`, `SW-0001`) использует `flecs` строго без ECS-систем; держатели `TypedEntity<Root>` живут только в `ObjectClass`, `CellClass` и `LocomotionClass`, а регистрация и вызовы 39 хуков (`G01..G12`, `E01..E27`), двухфазный хвост `EC01` в `.SAV` и 4-уровневый `Compute_CRC` выполняются статически через `ComponentRegistry<Ts...>` без `void*`-реестра и `dynamic_cast` `[А]` | автономные C++20 тесты EC + `tools/run_unit_tests.py` |
+| `SW-INV-04` | Слой EC (`code/ec/`, `SW-0001`) использует `flecs` строго без ECS-систем; держатели `TypedEntity<Root>` живут только в `ObjectClass`, `CellClass` и `LocomotionClass`, а регистрация и вызовы хуков (`G01..G12`, `E01..E27`, включая подклассы `OwnerType`, `Grand_Opening` и двухпараметрический `Captured`), двухфазный хвост `EC01` в `.SAV` и 4-уровневый `Compute_CRC` выполняются статически через `ComponentRegistry<Ts...>` без `void*`-реестра и `dynamic_cast` `[А]` | `tests/ec`, `tests/producecash` + `tools/run_unit_tests.py` |
 
 ## Бюджеты
 

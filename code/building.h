@@ -360,14 +360,6 @@ class BuildingClass : public TechnoClass
 		 */
 		char GateFrame;
 
-		/*
-		 * Cash production state. Grand_Opening seeds it before the building opens, so what
-		 * the constructor leaves behind is never read.
-		 */
-		CDTimerClass<FrameTimerClass> ProduceCashTimer;
-		int ProduceCashRemaining;			// Budget left to move; zero is spent and negative is unlimited.
-		bool IsProduceCashStartupPaid;
-
 		/*---------------------------------------------------------------------
 		**	Constructors, Destructors, and overloaded operators.
 		*/
@@ -515,7 +507,6 @@ class BuildingClass : public TechnoClass
 		void Rotation_AI(void) {}
 		void Factory_AI(void);
 		void Repair_AI(void);
-		void Produce_Cash_AI(void);
 		void Animation_AI(void);
 		virtual bool Revealed(HouseClass * house) override;
 		virtual void Repair(int control) override;
@@ -605,7 +596,6 @@ class BuildingClass : public TechnoClass
 		void Drop_Debris(AbstractClass * source = NULL);
 		AircraftClass * Place_Free_Aircraft(AircraftTypeClass const * type);
 		void Place_Free_Unit(void);
-		void Produce_Cash_Startup(void);
 
 		/*
 		 * This is the scenario INI section that lists the buildings to place upon the map.

@@ -9,9 +9,13 @@
 
 #include "always.h"
 
+#include "building.h"
+#include "builtype.h"
 #include "cell.h"
 #include "crc.h"
 #include "foot.h"
+#include "house.h"
+#include "houstype.h"
 #include "ipiggy.h"
 #include "loco.h"
 #include "object.h"
@@ -76,6 +80,18 @@ StableOwnerKey Build_Stable_Owner_Key(RootKind kind, void const * ptr)
 }
 
 } // namespace
+
+// ---------------------------------------------------------------------------
+// Component Attachment Helpers
+// ---------------------------------------------------------------------------
+
+void Ensure_Produce_Cash(BuildingClass & self)
+{
+	Ensure_Registered();
+	if (!self.Components.Has<ProduceCashComponent>()) {
+		self.Components.Emplace<ProduceCashComponent>();
+	}
+}
 
 // ---------------------------------------------------------------------------
 // Global Hooks (G01..G12)
@@ -310,9 +326,14 @@ void Dispatch_Record_The_Kill(TechnoClass & self, TechnoClass * source)
 	GameComponents::Dispatch_Record_The_Kill(self, source);
 }
 
-void Dispatch_Captured(TechnoClass & self, HouseClass * newowner)
+void Dispatch_Captured(TechnoClass & self, HouseClass * oldowner, HouseClass * newowner)
 {
-	GameComponents::Dispatch_Captured(self, newowner);
+	GameComponents::Dispatch_Captured(self, oldowner, newowner);
+}
+
+void Dispatch_Captured(BuildingClass & self, HouseClass * oldowner, HouseClass * newowner)
+{
+	GameComponents::Dispatch_Captured(self, oldowner, newowner);
 }
 
 void Dispatch_Assign_Target(TechnoClass & self, AbstractClass * target)
@@ -373,6 +394,11 @@ void Dispatch_Hidden(ObjectClass & self)
 void Dispatch_Revealed(ObjectClass & self, HouseClass * house)
 {
 	GameComponents::Dispatch_Revealed(self, house);
+}
+
+void Dispatch_Grand_Opening(BuildingClass & self, bool captured)
+{
+	GameComponents::Dispatch_Grand_Opening(self, captured);
 }
 
 void Dispatch_Draw_Pre_Render(ObjectClass const & self, Point2D const & point, Rect const & cliprect)

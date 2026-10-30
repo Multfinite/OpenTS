@@ -102,6 +102,91 @@ class StaticEcFlecsTests(unittest.TestCase):
             self.assertEqual(res.returncode, 0, msg=f"ectest failed:\n{res.stdout}\n{res.stderr}")
             self.assertIn("0 failed", res.stdout)
 
+    def test_compile_and_run_produce_cash_component_suite(self) -> None:
+        flecs_c = REPO_ROOT / "thirdparty" / "flecs" / "distr" / "flecs.c"
+        flecs_inc = REPO_ROOT / "thirdparty" / "flecs" / "include"
+        code_dir = REPO_ROOT / "code"
+        producecash_cpp = REPO_ROOT / "tests" / "producecash" / "producecashtest.cpp"
+        world_cpp = code_dir / "ec" / "world.cpp"
+        crc_cpp = code_dir / "crc.cpp"
+
+        self.assertTrue(producecash_cpp.is_file(), f"Missing ProduceCash test source: {producecash_cpp}")
+
+        common_defs = [
+            "-DFLECS_CUSTOM_BUILD",
+            "-DFLECS_CPP",
+            "-DFLECS_OS_API_IMPL",
+        ]
+
+        with tempfile.TemporaryDirectory(prefix="opents_producecash_") as tmp:
+            tmp_dir = pathlib.Path(tmp)
+            flecs_o = tmp_dir / "flecs.o"
+            crc_o = tmp_dir / "crc.o"
+            exe = tmp_dir / "producecashtest"
+
+            subprocess.run(
+                [
+                    "gcc",
+                    "-O1",
+                    "-c",
+                    str(flecs_c),
+                    f"-I{flecs_inc}",
+                    *common_defs,
+                    "-o",
+                    str(flecs_o),
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            crc_comp = subprocess.run(
+                [
+                    "g++",
+                    "-std=c++20",
+                    "-O2",
+                    "-c",
+                    str(crc_cpp),
+                    f"-I{code_dir}",
+                    "-o",
+                    str(crc_o),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(crc_comp.returncode, 0, msg=f"crc.cpp compile failed:\n{crc_comp.stderr}")
+
+            comp = subprocess.run(
+                [
+                    "g++",
+                    "-std=c++20",
+                    "-O2",
+                    "-Wall",
+                    "-Wextra",
+                    "-Werror",
+                    str(producecash_cpp),
+                    str(world_cpp),
+                    str(crc_o),
+                    str(flecs_o),
+                    f"-I{code_dir}",
+                    f"-I{flecs_inc}",
+                    *common_defs,
+                    "-Dflecs_STATIC",
+                    "-lpthread",
+                    "-o",
+                    str(exe),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(comp.returncode, 0, msg=f"producecashtest compile failed:\n{comp.stdout}\n{comp.stderr}")
+
+            res = subprocess.run([str(exe)], check=False, capture_output=True, text=True)
+            self.assertEqual(res.returncode, 0, msg=f"producecashtest failed:\n{res.stdout}\n{res.stderr}")
+            self.assertIn("0 failed", res.stdout)
+
     def test_public_ec_headers_compile_without_flecs_include_path(self) -> None:
         code_dir = REPO_ROOT / "code"
         probe_src = """
@@ -161,6 +246,7 @@ int VerifyFastPath() {
         crc_cpp = code_dir / "crc.cpp"
 
         empty_probe_src = """
+#define EC_CUSTOM_REGISTRY_COMPONENTS
 #include "ec/registry.h"
 
 class ObjectClass {
