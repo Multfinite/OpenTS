@@ -1,25 +1,24 @@
-# Claude Code instructions
+---
+id: root.claude
+title: "CLAUDE.md — адаптер для Claude Code в OpenTS"
+type: meta
+status: approved
+authority: none
+visibility: internal
+version: "1.0"
+updated: "2026-10-30"
+---
 
-`AGENTS.md` is the canonical instruction set for every agent. The files are
-imported here so Claude receives their rules at the start of a session. Do not
-repeat those rules in this file.
+# CLAUDE.md
 
-@AGENTS.md
-@code/AGENTS.md
-@manual/AGENTS.md
+Единственная точка входа — [`AGENTS.md`](AGENTS.md). Он собирается из `HYAI/HYAI/core/kernel/agents.md` и фрагментов активных доменов (`meta/domains/software/agents.md`, `HYAI/HYAI/core/domains/docs/agents.md`), проверка расхождения — `python3 HYAI/HYAI/tools/assemble_agents.py --check`.
 
-## Writing-rule hook
+Порядок чтения для Claude Code:
 
-`.claude/settings.json` runs the shared `.agents/hooks/style-rules.py` on
-five events. Edit, Write, and NotebookEdit payloads are checked as they land.
-Markdown edits re-inject the writing rules from `AGENTS.md`; C and C++ edits
-under `code/` re-inject the comment rules from `code/AGENTS.md` when they
-touch comments and report objective violations. Subagents receive both rule
-sections at start, and compaction re-injects them. Shell and script writes are
-not checked while they run: SessionStart records a worktree baseline, and Stop
-diffs the tree against it and reports what changed. That scan covers the whole
-worktree, so edits another session or an editor makes in the same tree land in
-its report too. No hook blocks. Edit results are context for the agent, and
-the end-of-turn scan is a message to the user. Codex uses the same script
-through `.codex/hooks.json` with the per-edit subset; the `AGENTS.md` files
-remain the only source of the rules.
+1. [`AGENTS.md`](AGENTS.md) — проверка среды исполнения (`HYAI-INT-30`), выбор домена и профиля, запреты, ворота и протокол чистого экспорта (`PRJ-POL-01..06`).
+2. [`HYAI/HYAI/core/kernel/principles.md`](HYAI/HYAI/core/kernel/principles.md) — `3D`, `HaRD`, `INRA`, `HELPER`.
+3. [`meta/project.md`](meta/project.md) — паспорт репозитория `OpenTS`, активные домены и карта путей.
+4. [`meta/policies/export.md`](meta/policies/export.md) — обязательное правило создания чистой экспортной ветки без следов `HYAI`.
+5. [`HYAI/HYAI/core/domains/`](HYAI/HYAI/core/domains/) — `policy.md`, `access.md`, `profiles/<profile>/README.md` выбранного домена.
+
+Если правило требует уточнения или фиксируется новое решение владельца — оно оформляется в [`meta/decisions/`](meta/decisions/README.md).

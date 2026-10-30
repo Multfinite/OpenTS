@@ -1,0 +1,39 @@
+# Оверлей домена narrative: словарь уровня нормативности и статусов.
+version: "2.0"
+domain: narrative
+extends: "HYAI/meta/schema/frontmatter.yaml"
+
+enums:
+  authority: [core, setting, detail, presentation, non-canon, none]
+  visibility: [public, internal, restricted, spoiler, author, system]
+  status: [draft, review, approved, superseded, archived]
+  knowledge: [common, secret, hidden, meta]
+  type:
+    - meta
+    - policy
+    - workflow
+    - template
+    - report
+    - decision
+    - entity
+    - article
+    - narrative
+    - rules
+    - reference
+    - working
+
+# Обратная совместимость: старые документы писали `canon` вместо `authority`.
+field_aliases:
+  authority: [canon]
+
+forbidden_values:
+  authority: [invariant, contract, implementation, convention]
+  visibility: [knowledge]
+  knowledge: [public, restricted]
+
+required_extra: [knowledge]
+
+defaults_by_dir:
+  world: {type: entity, authority: setting, visibility: internal, knowledge: common}
+  chapters: {type: narrative, authority: presentation, visibility: internal, knowledge: common}
+  drafts: {type: narrative, authority: non-canon, visibility: internal, knowledge: common}

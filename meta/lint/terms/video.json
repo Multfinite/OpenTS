@@ -1,0 +1,42 @@
+{
+  "$comment": "Машинные проверки обязательных intake gates видеодомена. Семантическая обработка/просмотр seam-window остаётся обязательным human workflow и не имитируется regex-проверкой.",
+  "domain": "video",
+  "applies_to": [
+    "HYAI/core/domains/video/videos/**"
+  ],
+  "rules": [
+    {
+      "id": "video.unset-audio-answer",
+      "severity": "error",
+      "pattern": "(?im)^[ \\t]*audio_required[ \\t]*:[ \\t]*(?:TBD|TODO|unknown|pending|не задано)\\b",
+      "applies_to": [
+        "HYAI/core/domains/video/videos/briefs/**",
+        "HYAI/core/domains/video/videos/sound/**"
+      ],
+      "suggest": "спросить пользователя явно yes/no о звуке, сообщив default=yes, и записать ответ",
+      "reason": "VID-POL-02: default=yes не заменяет обязательного явного ответа пользователя"
+    },
+    {
+      "id": "video.unset-storage-policy",
+      "severity": "error",
+      "pattern": "(?im)^[ \\t]*storage_policy(?:_source)?[ \\t]*:[ \\t]*(?:TBD|TODO|unknown|pending|не задано)\\b",
+      "applies_to": [
+        "HYAI/core/domains/video/videos/briefs/**"
+      ],
+      "suggest": "найти project-level policy или согласовать session-level хранение до media work",
+      "reason": "VID-POL-03: место, доступ и retention media определяются заранее"
+    },
+    {
+      "id": "video.unset-continuity-handoff",
+      "severity": "error",
+      "pattern": "(?im)^[ \\t]*continuity_handoff_mode[ \\t]*:[ \\t]*(?:TBD|TODO|unknown|pending|не задано)\\b",
+      "applies_to": [
+        "HYAI/core/domains/video/videos/briefs/**",
+        "HYAI/core/domains/video/videos/plans/**",
+        "HYAI/core/domains/video/videos/segments/**"
+      ],
+      "suggest": "спросить пользователя, передаётся ли last frame/tail, другой ref или сегменты независимы",
+      "reason": "VID-POL-04: способ generation handoff нельзя предполагать"
+    }
+  ]
+}

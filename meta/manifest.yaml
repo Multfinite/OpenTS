@@ -1,0 +1,285 @@
+# HYAI — машинная конфигурация проекта OpenTS.
+# Здесь только данные: активные домены и профили, пути, правила чистого экспорта, проверки.
+# Смысл правил — в HYAI/HYAI/core/kernel/*.md, HYAI/HYAI/core/domains/*/ и meta/policies/*.md.
+apiVersion: hyai/v1
+kind: HyaiManifest
+metadata:
+  name: opents
+  version: "0.1.0"
+  status: active
+  updated: "2026-10-30"
+  language: ru
+  owner: Multfinite
+  license: "GPL-3.0-or-later"
+
+entrypoint: "AGENTS.md"
+entrypoints:
+  - "AGENTS.md"
+  - "CLAUDE.md"
+
+active:
+  - domain: software
+    profile: code
+  - domain: docs
+    profile: tech-writer
+    root_paths:
+      - "docs"
+      - "meta/specs"
+      - "meta/diagrams"
+
+domains:
+  kit: "HYAI/core/domains/kit/manifest.yaml"
+  software: "meta/domains/software/manifest.yaml"
+  docs: "HYAI/core/domains/docs/manifest.yaml"
+  narrative: "HYAI/core/domains/narrative/manifest.yaml"
+  picture: "HYAI/core/domains/picture/manifest.yaml"
+  video: "HYAI/core/domains/video/manifest.yaml"
+
+# Подмодуль каркаса установлен в `HYAI/`, внутри него каталог `HYAI/` с `core/`, `meta/`, `tools/`.
+framework:
+  root: "HYAI/"
+  prefix: "HYAI/HYAI/"
+
+paths:
+  core: "HYAI/core/"
+  kernel: "HYAI/core/kernel/"
+  domains: "HYAI/core/domains/"
+  shared: "HYAI/core/shared/"
+  tools: "tools/"
+  tests: "tools/tests/"
+  hyai_tools: "HYAI/tools/"
+  hyai_tests: "HYAI/tools/tests/"
+  meta: "meta/"
+  policies: "meta/policies/"
+  reports: "meta/reports/"
+  plans: "meta/reports/plans/"
+  archive: "meta/reports/archive/"
+  intermediate: "meta/intermediate/"
+  exports: "meta/exports/"
+  registry: "meta/registry/documents.yaml"
+  architecture: "meta/architecture.md"
+  architecture_dir: "meta/architecture/"
+  terminology: "meta/terminology.md"
+  terminology_dir: "meta/terminology/"
+  questions: "meta/questions.md"
+  questions_dir: "meta/questions/"
+  decisions: "meta/decisions/"
+  schema: "meta/schema/"
+  lint: "meta/lint/"
+  frontmatter_schema: "meta/schema/frontmatter.yaml"
+  frontmatter_overlay: "meta/schema/domains/{domain}.yaml"
+
+protected_zones:
+  - "HYAI/"
+  - "meta/schema/"
+  - "meta/manifest.yaml"
+  - "meta/policies/"
+
+optional_paths:
+  - "meta/intermediate/"
+  - "meta/exports/"
+
+path_map:
+  "*.md": project
+  "meta/**": project
+  "meta/specs/**": docs
+  "meta/diagrams/**": docs
+  "tools/**": software
+  "code/**": software
+  "cmake/**": software
+  "CMakeLists.txt": software
+  "tests/**": software
+  "ui/**": software
+  "Run/**": software
+  "thirdparty/**": software
+  "docs/**": docs
+  "manual/**": docs
+
+# Машинные параметры чистого экспорта результата задачи в ветку без следов HYAI (PRJ-POL-01..06, P-0001).
+export:
+  default_base: "origin/main"
+  exclude_paths:
+    - "HYAI"
+    - "HYAI/**"
+    - "meta/**"
+    - "tools/**"
+    - "AGENTS.md"
+    - "CLAUDE.md"
+    - ".claude/settings.json"
+    - ".codex/hooks.json"
+  strip_submodules:
+    - "HYAI"
+  legacy_whitespace_exempt:
+    - "LICENSE.md"
+    - "manual/tools/commands_engine.py"
+    - "manual/tools/versioning.py"
+    - "manual/site/src/lib/lifecycle.ts"
+    - "manual/site/src/lib/schema-validator.ts"
+    - "ui/OFL.txt"
+  forbidden_content_patterns:
+    - "\\bHYAI\\b"
+    - "\\b(?:HYAI|PRJ|SW|DOC|KIT|NR|PIC|VID)-(?:PERM-[NGAPEV]|POL|INV|INT|ART|DEC|PROV|TXT|SAF|PRM|ENV|WF|QA)-\\d{2}\\b"
+    - "apiVersion:\\s*hyai/"
+    - "(?<!\\w)\\[(?:А|И|В|Г|\\?)\\](?!\\()"
+  forbidden_commit_patterns:
+    - "\\bHYAI\\b"
+    - "\\b(?:HYAI|PRJ|SW|DOC|KIT|NR|PIC|VID)-(?:PERM-[NGAPEV]|POL|INV|INT|ART|DEC|PROV|TXT|SAF|PRM|ENV|WF|QA)-\\d{2}\\b"
+    - "\\b(?:P|SW|DOC|KIT|NR|PIC|VID)-\\d{4}\\b"
+    - "meta/reports/"
+    - "meta/decisions/"
+
+report:
+  naming: "YYYY-MM-DD-<slug>.md"
+  dir_pattern: "meta/reports/{scope}/"
+  allowed_scopes: [project, kit, software, docs, narrative, picture, video]
+  index: "meta/reports/README.md"
+  required_fields: [id, title, type, report_kind, domain, profile, status, date, workflow]
+  optional_fields: [cross_scope, decisions, role, prism, characters, supersedes]
+  cross_scope_field: cross_scope
+  kinds:
+    task:
+      required_sections: ["Задача", "Что сделано", "Проверка", "Открытые вопросы"]
+    audit:
+      required_sections: ["Рамка и источники", "Находки", "Предложения", "Открытые вопросы"]
+    analysis:
+      required_sections: ["Вопрос", "Разбор", "Варианты", "Рекомендация", "Открытые вопросы"]
+  templates:
+    task: "HYAI/core/kernel/templates/report.md"
+    audit: "HYAI/core/kernel/templates/audit-report.md"
+    analysis: "HYAI/core/shared/templates/analysis-report.md"
+
+decisions:
+  id_format: "{prefix}-NNNN"
+  filename: "{id}-{slug}.md"
+  index: "meta/decisions/README.md"
+  max_lines: 120
+  scopes:
+    project:
+      prefix: "P"
+      dir: "meta/decisions/project"
+      title: "Проектные решения (касаются всех доменов)"
+    kit:
+      prefix: "KIT"
+      dir: "meta/decisions/kit"
+      title: "Решения о формате HYAI"
+    software:
+      prefix: "SW"
+      dir: "meta/decisions/software"
+      title: "Решения домена software"
+    docs:
+      prefix: "DOC"
+      dir: "meta/decisions/docs"
+      title: "Решения домена docs"
+    narrative:
+      prefix: "NR"
+      dir: "meta/decisions/narrative"
+      title: "Решения домена narrative"
+    picture:
+      prefix: "PIC"
+      dir: "meta/decisions/picture"
+      title: "Решения домена picture"
+    video:
+      prefix: "VID"
+      dir: "meta/decisions/video"
+      title: "Решения домена video"
+
+task_contract:
+  required_fields: [goal, non_goals, domain, profile, sources, outputs, acceptance, contour, stop_conditions]
+  approval_required_for:
+    - invariant
+    - contract
+    - new_dependency
+    - schema_migration
+    - public_api_break
+    - mass_rename
+    - new_domain
+    - new_profile
+
+precedence:
+  - non_overridable
+  - user_explicit_task
+  - task_contract
+  - kernel_policies
+  - domain_policies
+  - profile_policies
+  - manifest
+  - defaults
+
+non_overridable:
+  - data_integrity
+  - secret_protection
+  - no_malware
+  - no_source_exfiltration
+  - owner_approves_norms
+  - access_default_deny
+  - user_data_local
+  - no_environment_damage
+  - no_history_rewrite
+
+permissions:
+  read:
+    scope: repo
+    exclude:
+      - ".git/**"
+      - ".env"
+      - ".env.*"
+      - "**/*.pem"
+      - "**/*.key"
+      - "meta/intermediate/**"
+  write:
+    scope: repo
+    require_approval_for:
+      - "HYAI/**"
+      - "meta/manifest.yaml"
+      - "meta/schema/**"
+      - "meta/policies/**"
+      - "meta/decisions/project/**"
+      - ".github/workflows/**"
+  execute:
+    allow: [python3, pytest, git, cmake, ctest]
+    require_approval_for: [rm, mv, curl, wget, pip]
+  network:
+    allow: [github.com, api.github.com]
+    require_approval_for_other: true
+  secrets: deny
+
+validation:
+  assemble:
+    - "python3 HYAI/tools/assemble_agents.py --check"
+  core:
+    - "python3 HYAI/tools/frontmatter.py --check"
+    - "python3 HYAI/tools/check_links.py"
+    - "python3 HYAI/tools/lint_terms.py"
+    - "python3 HYAI/tools/check_decisions.py"
+    - "python3 HYAI/tools/check_report.py"
+    - "python3 HYAI/tools/check_domains.py"
+    - "python3 HYAI/tools/check_manifest.py"
+    - "python3 HYAI/tools/check_indexes.py"
+    - "python3 HYAI/tools/check_rules.py"
+    - "python3 tools/check_whitespace.py"
+  project:
+    - "python3 tools/run_unit_tests.py"
+  data:
+    frontmatter_schema: "meta/schema/frontmatter.yaml"
+    links: "meta/lint/links.json"
+    whitespace: "meta/lint/whitespace.json"
+    terms_dir: "meta/lint/terms/"
+    rule_ids: "meta/schema/rule-ids.yaml"
+  ci: ".github/workflows/engine.yml"
+
+bootstrap:
+  require_domain_and_profile: true
+  max_questions: 2
+
+interaction:
+  language: ru
+  question_tool_max: 4
+  spa_threshold: 6
+  spa_dir: "meta/intermediate/"
+  spa_entrypoint: "index.html"
+
+artifacts:
+  intermediate_dir: "meta/intermediate/"
+  ignore_in_git: true
+  exports_dir: "meta/exports/"
+  no_binaries_over_mb: 10

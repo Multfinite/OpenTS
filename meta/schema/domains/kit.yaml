@@ -1,0 +1,27 @@
+# Оверлей домена kit: правила каркаса и его собственные документы.
+version: "2.0"
+domain: kit
+extends: "HYAI/meta/schema/frontmatter.yaml"
+
+enums:
+  authority: [invariant, contract, convention, none]
+  visibility: [public, internal, restricted]
+  type:
+    - meta
+    - policy
+    - workflow
+    - template
+    - report
+    - decision
+    - spec
+    - architecture
+    - tool
+    - reference
+    - working
+
+forbidden_values:
+  visibility: [spoiler, author, system]
+  authority: [core, setting, detail, presentation, non-canon, implementation, experimental]
+
+defaults_by_dir:
+  AI: {type: tool, authority: none, visibility: internal}

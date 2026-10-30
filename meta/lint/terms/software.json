@@ -1,0 +1,29 @@
+{
+  "$comment": "Доменные правила терминов. applies_to обязателен: иначе правило ударит по чужим путям.",
+  "domain": "software",
+  "applies_to": ["src/**", "tests/**", "docs/**"],
+  "rules": [
+    {
+      "id": "sw.no-magic-numbers",
+      "severity": "warn",
+      "pattern": "(?<![\\w.])(?:86400|3600|1024\\s*\\*\\s*1024)\\b",
+      "applies_to": ["src/**"],
+      "suggest": "именованная константа",
+      "reason": "SW-POL-13: числа с смыслом должны быть названы"
+    },
+    {
+      "id": "sw.no-empty-except",
+      "severity": "error",
+      "pattern": "except\\s*:\\s*\\n\\s*pass",
+      "applies_to": ["src/**"],
+      "reason": "SW-POL-10: ошибка не проглатывается"
+    },
+    {
+      "id": "sw.no-fixme-without-q",
+      "severity": "warn",
+      "pattern": "\\bFIXME\\b(?!\\(Q-)",
+      "applies_to": ["src/**", "tests/**"],
+      "reason": "HYAI-PROV-01: незакрытое место оформляется как открытый вопрос"
+    }
+  ]
+}

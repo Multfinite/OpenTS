@@ -1,0 +1,29 @@
+# Оверлей домена picture: словарь брифов, промптов «5+3», промежуточных звеньев и паспортов ассетов.
+version: "1.0"
+domain: picture
+extends: "HYAI/meta/schema/frontmatter.yaml"
+
+enums:
+  authority: [visual-canon, brief, prompt, stage, none]
+  visibility: [public, internal, restricted]
+  status: [draft, review, approved, superseded, deprecated, archived]
+  type:
+    - meta
+    - policy
+    - workflow
+    - template
+    - report
+    - decision
+    - brief
+    - style-spec
+    - prompt-spec
+    - stage-manifest
+    - asset-card
+    - working
+
+forbidden_values:
+  authority: [invariant, contract, implementation, convention, normative, descriptive, illustrative, informative, core, setting, detail, presentation]
+  visibility: [spoiler, author, system]
+
+defaults_by_dir:
+  "HYAI/core/domains/picture/pictures": {type: asset-card, authority: stage, visibility: internal}

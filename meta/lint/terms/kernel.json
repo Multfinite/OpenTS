@@ -1,0 +1,41 @@
+{
+  "domain": "kernel",
+  "applies_to": [
+    "meta/reports/**",
+    "AGENTS.md"
+  ],
+  "rules": [
+    {
+      "id": "kernel.no-flattery",
+      "severity": "error",
+      "pattern": "(?i)\\b(отличн\\w+ вопрос|вы абсолютно правы|как ИИ, я|с радостью помогу|прекрасн\\w+ иде\\w+|замечательн\\w+ вопрос)\\b",
+      "applies_to": [
+        "meta/reports/**",
+        "AGENTS.md"
+      ],
+      "suggest": "ответ по существу, без оценки вопроса",
+      "reason": "HELPER / HYAI-INT-15: оценка вопроса не несёт информации и подменяет разбор"
+    },
+    {
+      "id": "kernel.no-approval-begging",
+      "severity": "warn",
+      "pattern": "(?i)(надеюсь, вы не против|если вы не против|позвольте мне|можно я|не сочтите за дерзость)",
+      "applies_to": [
+        "meta/reports/**",
+        "AGENTS.md"
+      ],
+      "suggest": "действовать в рамках INRA или предложить вариант с ценой",
+      "reason": "HELPER / INRA: одобрение запрашивается только там, где требует правило"
+    },
+    {
+      "id": "kernel.invented-ban",
+      "severity": "warn",
+      "pattern": "(?i)(мне не разрешено|у меня нет прав|не имею права|это запрещено)(?![^\\n]*(PERM|DOC-|SW-|NR-|KIT-|PRJ-|INT-|DOC\\d))",
+      "applies_to": [
+        "meta/reports/**"
+      ],
+      "suggest": "отказ обязан ссылаться на ID правила; иначе запрет выдуман",
+      "reason": "HYAI-PERM-N10: отказ без ссылки на правило — дефект работы"
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+# Оверлей домена software. Заменяет словари, специфичные для кода.
+version: "2.0"
+domain: software
+extends: "HYAI/meta/schema/frontmatter.yaml"
+
+enums:
+  authority: [invariant, contract, implementation, convention, experimental, none]
+  visibility: [public, internal, restricted]
+  type:
+    - meta
+    - policy
+    - workflow
+    - template
+    - report
+    - decision
+    - spec
+    - architecture
+    - contract
+    - runbook
+    - reference
+    - tool
+    - working
+
+# Запрещённые значения из других доменов: попытка поставить — ошибка, а не предупреждение.
+forbidden_values:
+  visibility: [spoiler, author, system, knowledge]
+  authority: [core, setting, detail, presentation, non-canon]
+
+defaults_by_dir:
+  src: {type: reference, authority: implementation, visibility: internal}
+  tests: {type: reference, authority: implementation, visibility: internal}
+  docs: {type: guide, authority: descriptive, visibility: public}

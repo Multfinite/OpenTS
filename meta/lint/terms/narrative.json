@@ -1,0 +1,40 @@
+{
+  "$comment": "Литературные правила не применяются к коду: applies_to ограничивает зону.",
+  "domain": "narrative",
+  "applies_to": [
+    "world/**",
+    "chapters/**",
+    "drafts/**"
+  ],
+  "rules": [
+    {
+      "id": "nr.no-meta-language",
+      "severity": "warn",
+      "pattern": "\\b(в данном мире|как известно|следует отметить|является важным)\\b",
+      "applies_to": [
+        "chapters/**",
+        "world/**"
+      ],
+      "reason": "NR-POL-07: канцелярит в описании мира разрушает голос"
+    },
+    {
+      "id": "nr.fact-without-marker",
+      "severity": "warn",
+      "pattern": "^(?![\\s>*\\-|#]).*(?:\\bвсегда\\b|\\bникогда\\b|\\bневозможно\\b)",
+      "applies_to": [
+        "world/**"
+      ],
+      "reason": "NR-POL-04: абсолютные утверждения требуют маркера провенанса"
+    },
+    {
+      "id": "nr.evaluation-as-fact",
+      "severity": "warn",
+      "pattern": "(?i)\\b(поразительно|удивительно|трагично|восхитительно),? что\\b",
+      "applies_to": [
+        "world/**"
+      ],
+      "suggest": "в описании мира — факт и его цена, оценка живёт в художественном тексте",
+      "reason": "NR-TXT-06: оценка не является фактом"
+    }
+  ]
+}

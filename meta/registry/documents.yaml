@@ -1,0 +1,39 @@
+# Репозиторный реестр OpenTS: что читать первым независимо от домена.
+# Доменные реестры — HYAI/HYAI/core/domains/<domain>/registry/documents.yaml.
+version: "2.0"
+read_first:
+  - "AGENTS.md"
+  - "meta/project.md"
+  - "meta/manifest.yaml"
+  - "meta/policies/export.md"
+documents:
+  - id: repo.agents
+    path: "AGENTS.md"
+    type: meta
+    authority: invariant
+    why: "протокол старта: среда исполнения, домен, профиль, ворота и чистый экспорт"
+  - id: repo.claude
+    path: "CLAUDE.md"
+    type: meta
+    authority: none
+    why: "адаптер входа для Claude Code"
+  - id: repo.project
+    path: "meta/project.md"
+    type: meta
+    authority: invariant
+    why: "паспорт OpenTS, активные домены и иерархия источников истины"
+  - id: repo.manifest
+    path: "meta/manifest.yaml"
+    type: tool
+    authority: contract
+    why: "активная конфигурация доменов, путей и параметров экспорта"
+  - id: repo.export_policy
+    path: "meta/policies/export.md"
+    type: policy
+    authority: invariant
+    why: "правила PRJ-POL-01..06 создания чистой экспортной ветки без следов HYAI"
+  - id: repo.routing
+    path: "HYAI/core/kernel/routing.md"
+    type: meta
+    authority: invariant
+    why: "как выбрать домен и профиль"

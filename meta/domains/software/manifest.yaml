@@ -1,0 +1,18 @@
+apiVersion: hyai/v1
+kind: AgentDomain
+includes:
+  - "HYAI/core/domains/software/manifest.yaml"
+metadata:
+  name: software
+  title: "Разработка программного обеспечения (движок OpenTS)"
+  status: approved
+  updated: "2026-10-30"
+  owner: Multfinite
+
+root_paths:
+  - "code"
+  - "cmake"
+  - "tests"
+  - "ui"
+
+agents: "meta/domains/software/agents.md"

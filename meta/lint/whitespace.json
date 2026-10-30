@@ -1,0 +1,6 @@
+{
+  "$comment": "Настройки whitespace.py. Два пробела в .md разрешены: CommonMark hard break.",
+  "extensions": [".md", ".json", ".yaml", ".yml", ".txt", ".py", ".toml", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs", ".sql", ".css", ".html"],
+  "allow_two_space_break_in": [".md"],
+  "forbid_blank_line_at_eof": true
+}

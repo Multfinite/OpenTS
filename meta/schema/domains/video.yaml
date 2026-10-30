@@ -1,0 +1,34 @@
+# Оверлей video: production briefs, timecoded shots, continuity windows and delivery records.
+version: "1.0"
+domain: video
+extends: "HYAI/meta/schema/frontmatter.yaml"
+
+enums:
+  authority: [video-canon, brief, shot-plan, continuity, segment-record, delivery, none]
+  visibility: [public, internal, restricted]
+  status: [draft, review, approved, superseded, deprecated, archived]
+  type:
+    - meta
+    - policy
+    - workflow
+    - template
+    - report
+    - decision
+    - brief
+    - production-canon
+    - shot-plan
+    - continuity-ledger
+    - seam-window
+    - segment-record
+    - sound-plan
+    - storage-policy
+    - assembly-manifest
+    - delivery-card
+    - working
+
+forbidden_values:
+  authority: [invariant, contract, implementation, convention, normative, descriptive, illustrative, informative, core, setting, detail, presentation]
+  visibility: [spoiler, author, system]
+
+defaults_by_dir:
+  "HYAI/core/domains/video/videos": {type: working, authority: none, visibility: internal}

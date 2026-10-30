@@ -1,0 +1,52 @@
+{
+  "$comment": "Правила домена docs: вода, требования без критерия, диаграммы картинкой.",
+  "domain": "docs",
+  "applies_to": [
+    "docs/**",
+    "specs/**",
+    "diagrams/**"
+  ],
+  "rules": [
+    {
+      "id": "doc.no-water",
+      "severity": "warn",
+      "pattern": "\\b(как известно|важно отметить|следует понимать|в современном мире|не секрет, что)\\b",
+      "applies_to": [
+        "docs/**",
+        "specs/**",
+        "diagrams/**"
+      ],
+      "reason": "DOC-POL-06: вода занимает место и не несёт требования"
+    },
+    {
+      "id": "doc.todo-without-owner",
+      "severity": "warn",
+      "pattern": "\\bTODO\\b(?!\\()",
+      "applies_to": [
+        "docs/**",
+        "specs/**"
+      ],
+      "reason": "HYAI-PROV-01: незакрытое место оформляется как Q-* с владельцем"
+    },
+    {
+      "id": "doc.diagram-as-image-only",
+      "severity": "error",
+      "pattern": "!\\[[^\\]]*\\]\\([^)]*\\.(?:png|jpg|jpeg|svg)\\)(?!.*mermaid)",
+      "applies_to": [
+        "diagrams/**"
+      ],
+      "reason": "DOC-POL-10: схема хранится текстом, картинка — только выгрузка"
+    },
+    {
+      "id": "doc.self-reference",
+      "severity": "warn",
+      "pattern": "(?i)\\b(в этом разделе|ниже приведён|выше было сказано|как видно из таблицы|в данном документе)\\b",
+      "applies_to": [
+        "docs/**",
+        "specs/**"
+      ],
+      "suggest": "удалить мета-комментарий: читатель видит структуру",
+      "reason": "DOC-TXT-06: описание документа вместо документа"
+    }
+  ]
+}

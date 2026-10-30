@@ -1,0 +1,32 @@
+# Оверлей домена docs: словарь документов, требований и схем.
+version: "1.0"
+domain: docs
+extends: "HYAI/meta/schema/frontmatter.yaml"
+
+enums:
+  authority: [normative, descriptive, illustrative, informative, none]
+  visibility: [public, internal, restricted]
+  status: [draft, review, approved, superseded, archived]
+  type:
+    - meta
+    - policy
+    - workflow
+    - template
+    - report
+    - decision
+    - requirements
+    - spec
+    - guide
+    - reference
+    - diagram
+    - tool
+    - working
+
+forbidden_values:
+  authority: [invariant, contract, implementation, convention, core, setting, detail, presentation]
+  visibility: [spoiler, author, system]
+
+defaults_by_dir:
+  specs: {type: spec, authority: normative, visibility: internal}
+  docs: {type: guide, authority: descriptive, visibility: public}
+  diagrams: {type: diagram, authority: illustrative, visibility: internal}

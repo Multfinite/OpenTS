@@ -1,0 +1,126 @@
+# Базовая схема frontmatter проекта OpenTS. Читается HYAI/HYAI/tools/frontmatter.py.
+# Доменные оверлеи — в meta/schema/domains/. Словари authority/status — в HYAI/HYAI/core/domains/<d>/schema/.
+version: "2.0"
+
+required: [id, title, type, status, authority, visibility]
+
+optional:
+  - domain
+  - profile
+  - cross_scope
+  - cross_scope_field
+  - decisions
+  - template
+  - template_kind
+  - date
+  - scope
+  - affects
+  - affects_domains
+  - supersedes
+  - superseded_by
+  - merged_into
+  - knowledge
+  - known_by
+  - requires
+  - role
+  - prism
+  - characters
+  - owner
+  - version
+  - updated
+  - enforced
+  - generated
+  - report_kind
+  - workflow
+
+enums:
+  type:
+    - meta
+    - policy
+    - workflow
+    - template
+    - report
+    - decision
+    - spec
+    - architecture
+    - contract
+    - runbook
+    - reference
+    - entity
+    - article
+    - narrative
+    - rules
+    - tool
+    - working
+  status: [draft, review, approved, superseded, deprecated, archived, merged]
+  authority: [invariant, contract, convention, none]
+  visibility: [public, internal, restricted]
+  template_kind: [output, request, snippet]
+  report_kind: [task, audit, analysis]
+
+forbidden_fields:
+  - self_editable
+  - may_edit_domains
+  - activation
+  - assumed
+  - auto_activate
+  - allow_self_edit
+
+field_aliases: {}
+
+skip_parts:
+  - .git
+  - __pycache__
+  - node_modules
+  - .venv
+  - venv
+  - dist
+  - build
+  - _backups
+  - .obsidian
+  - Exports
+
+# Апстрим-файлы продукта OpenTS и подмодуль HYAI не получают HYAI frontmatter,
+# чтобы экспорт задач в чистую ветку не содержал следов HYAI (PRJ-POL-02..03).
+skip_prefixes:
+  - HYAI
+  - thirdparty
+  - manual
+  - docs
+  - code
+  - .github
+  - .agents
+  - .claude
+  - .codex
+  - meta/intermediate
+  - README.md
+  - LICENSE.md
+  - CONTRIBUTING.md
+  - ACKNOWLEDGEMENTS.md
+  - THIRD_PARTY_NOTICES.md
+
+skip_names:
+  - agents.md
+
+defaults_by_dir:
+  code: {type: reference, authority: contract, visibility: internal}
+  tests: {type: reference, authority: contract, visibility: internal}
+  docs: {type: spec, authority: contract, visibility: public}
+  HYAI/HYAI/core: {type: reference, authority: invariant, visibility: internal}
+  HYAI/HYAI/tools: {type: tool, authority: none, visibility: internal}
+  meta: {type: meta, authority: contract, visibility: internal}
+  tools: {type: tool, authority: none, visibility: internal}
+
+root_default:
+  type: working
+  authority: none
+  visibility: internal
+
+merge:
+  required: union
+  optional: union
+  enums: replace_by_key
+  defaults_by_dir: override
+  skip_parts: union
+  skip_prefixes: union
+  field_aliases: union

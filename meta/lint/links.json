@@ -1,0 +1,22 @@
+{
+  "$comment": "Настройки check_links.py проекта OpenTS. Пути указаны от корня репозитория.",
+  "extensions": [
+    ".md"
+  ],
+  "check_code_targets": true,
+  "placeholder_patterns": [
+    "<[^>]*>",
+    "\\{\\{[^}]*\\}\\}",
+    "…",
+    "\\*"
+  ],
+  "exclude": [
+    ".git/**",
+    "HYAI/**",
+    "thirdparty/**",
+    "manual/**",
+    "meta/intermediate/**",
+    "meta/exports/**",
+    "__pycache__/**"
+  ]
+}

@@ -16,3 +16,6 @@
 [submodule "thirdparty/SDL"]
 	path = thirdparty/SDL
 	url = https://github.com/libsdl-org/SDL.git
+[submodule "HYAI"]
+	path = HYAI
+	url = https://github.com/Multfinite/HYAI.git

@@ -1,0 +1,91 @@
+{
+  "$comment": "Машинные правила домена picture: ворота безопасности, негативный промпт, пустые штампы, веса, брак и отложенный стиль. Глобы автоматически ребазируются движком на root_paths активного домена проекта-потребителя.",
+  "domain": "picture",
+  "applies_to": [
+    "HYAI/core/domains/picture/pictures/**"
+  ],
+  "rules": [
+    {
+      "id": "pic.unset-safety-placeholder",
+      "severity": "error",
+      "pattern": "(?i)\\bsafety_(?:nsfw|copyright|person|violence)\\b[^\\n]*\\b(?:TBD|TODO|unset|unknown|не задано)\\b",
+      "applies_to": [
+        "HYAI/core/domains/picture/pictures/briefs/**",
+        "HYAI/core/domains/picture/pictures/prompts/**",
+        "HYAI/core/domains/picture/pictures/assets/**"
+      ],
+      "suggest": "остановить работу и запросить все 4 правила безопасности у пользователя",
+      "reason": "PIC-SAF-01: без явно заданных NSFW, Copyright, Person и Violence работа над задачей не ведётся"
+    },
+    {
+      "id": "pic.empty-negative-prompt",
+      "severity": "error",
+      "pattern": "(?i)\\bnegative_prompt\\s*:\\s*(?:none|null|~|\"\"|''|нет|пусто)\\b",
+      "applies_to": [
+        "HYAI/core/domains/picture/pictures/prompts/**"
+      ],
+      "suggest": "автоматически собрать динамическую секцию negative под сцену и ограничения",
+      "reason": "PIC-PRM-03 / PIC-POL-02: секция negative обязательна и формируется динамически"
+    },
+    {
+      "id": "pic.filler-quality-tags",
+      "severity": "warn",
+      "pattern": "(?i)\\b(?:masterpiece|best quality|ultra[- ]detailed|8k uhd|award[- ]winning|trending on artstation)\\b",
+      "applies_to": [
+        "HYAI/core/domains/picture/pictures/prompts/**"
+      ],
+      "suggest": "заменить штампы конкретным описанием формы, света, материалов и камеры",
+      "reason": "PIC-PRM-02: пустые усилители качества не засчитываются в MinDetail"
+    },
+    {
+      "id": "pic.mixed-weight-syntax",
+      "severity": "error",
+      "pattern": "(?s)(?:\\([^()\\n]+:\\d+(?:\\.\\d+)?\\).*::\\d+(?:\\.\\d+)?|::\\d+(?:\\.\\d+)?.*\\([^()\\n]+:\\d+(?:\\.\\d+)?\\))",
+      "applies_to": [
+        "HYAI/core/domains/picture/pictures/prompts/**"
+      ],
+      "suggest": "привести веса к нативному синтаксису одной выбранной модели",
+      "reason": "PIC-PRM-05: запрещено смешивать весовые синтаксисы разных семейств моделей"
+    },
+    {
+      "id": "pic.rejected-artifact-stored",
+      "severity": "error",
+      "pattern": "(?i)\\b(?:rejected|failed)[-_](?:attempt|render|try)\\.(?:png|jpg|jpeg|webp)\\b",
+      "applies_to": [
+        "HYAI/core/domains/picture/pictures/**"
+      ],
+      "suggest": "удалить бинарник неудачной попытки и оставить только текстовую запись в логе итераций",
+      "reason": "PIC-POL-04: результаты неудачной промежуточной генерации не хранятся"
+    },
+    {
+      "id": "pic.premature-style-on-base",
+      "severity": "error",
+      "pattern": "(?i)\\bstyle_phase\\s*:\\s*target-style\\b",
+      "applies_to": [
+        "HYAI/core/domains/picture/pictures/stages/**"
+      ],
+      "suggest": "держать style_phase: base-neutral на промежуточных звеньях и применять target-style только в конце",
+      "reason": "PIC-POL-05: фильтр стиля накладывается строго после готовности конечного базового изображения"
+    },
+    {
+      "id": "pic.unset-env-anchor",
+      "severity": "error",
+      "pattern": "(?i)\\benv_(?:canon_source|anchor_ids)\\b[^\\n]*\\b(?:TBD|TODO|unset|unknown|не задано|пусто)\\b",
+      "applies_to": [
+        "HYAI/core/domains/picture/pictures/briefs/**",
+        "HYAI/core/domains/picture/pictures/prompts/**"
+      ],
+      "suggest": "указать документ канона окружения проекта и ID якорей; если их нет — остановиться и спросить пользователя",
+      "reason": "PIC-ENV-01 / PIC-PRM-06: окружение кадра задаётся каноном мира проекта, а не умолчаниями модели"
+    },
+    {
+      "id": "pic.todo-without-owner",
+      "severity": "warn",
+      "pattern": "\\bTODO\\b(?!\\()",
+      "applies_to": [
+        "HYAI/core/domains/picture/pictures/**"
+      ],
+      "reason": "HYAI-PROV-01: незакрытое место оформляется как Q-PIC-* с владельцем"
+    }
+  ]
+}

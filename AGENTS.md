@@ -1,217 +1,122 @@
-# OpenTS repository instructions
+<!-- generated: true -->
+<!-- source: HYAI/HYAI/core/kernel/agents.md + HYAI/HYAI/core/domains/<domain>/agents.md -->
+<!-- правки вносятся в источники; проверка: assemble_agents.py --check -->
 
-These instructions apply to the entire repository. A more specific `AGENTS.md`
-may add rules for its subtree.
+# Инструкции для ИИ-агента
 
-## AI usage rules
+Этот файл собирается из `HYAI/HYAI/core/kernel/agents.md`, фрагментов `HYAI/HYAI/core/domains/<domain>/agents.md` и активной конфигурации. Правки вносятся в источники; `assemble_agents.py --check` падает, если файл разошёлся со сборкой.
 
-- Using AI agents in this repository is allowed for inspection, research,
-  planning, code generation, refactoring, documenting, testing, and other
-  local development work.
-- AI-generated code is permitted as long as it follows the guidelines in
-  `CONTRIBUTING.md` and is otherwise of high quality. Low-quality
-  contributions will be rejected.
-- AI agents may draft a pull-request description and open a pull request
-  only when a human explicitly asks them to. Opening a pull request under
-  this rule includes committing the changes for that pull request and
-  pushing the branch it is opened from.
-- The human who asks remains responsible for the submission. Review the
-  diff and the pull-request description before the pull request is marked
-  ready, as `CONTRIBUTING.md` already requires for AI-assisted work.
-- AI agents must not open GitHub issues, or write issue comments or review
-  comments, unless a human explicitly asks for that specific message.
-- Preparing code, tests, documentation, commits, or local branches for a
-  human to review and submit remains allowed without such a request.
+## 1. Вход: среда исполнения, домен и профиль
 
-## Required context
+Сразу при входе, до выбора домена/профиля и выполнения работы, проверь, поддерживает ли текущее агентское окружение запуск процессов и параллельную диспетчеризацию. Примени `HYAI-INT-30`: независимые задачи выполняй параллельно в согласованном лимите; до первого такого запуска спроси максимум одновременных задач, если пользователь не задал его заранее. Если среда не поддерживает параллельность, работай последовательно.
 
-Read `CONTRIBUTING.md` before changing the project. Read `docs/BUILDING.md`
-before making or repeating a build claim, and read `docs/STYLE.md` before
-changing source.
+Для независимых удалённых вызовов через MCP, API сервисов или других моделей используй очередь с уведомлением о завершении; обрабатывай готовые результаты сразу, не ожидая не связанных с ними заданий (`HYAI-INT-30`, `HYAI/core/kernel/workflows/parallel-execution.md`).
 
-For work under `manual/`, read and follow `manual/AGENTS.md`; it supplements
-these instructions and routes authoring and maintenance work to the owning
-manual guides.
+Затем определи и объяви пару «домен + профиль» по `HYAI-INT-01..04` и `HYAI/HYAI/core/kernel/routing.md`; явное указание пользователя имеет приоритет. Зафиксируй пару в контракте и отчёте (`domain`, `profile`). Если выбор неясен — действуй по правилам вопросов `HYAI/HYAI/core/kernel/policies/interaction.md`. Без объявленной пары работу не начинай.
 
-## Project intent
+## 2. Что читать
 
-OpenTS maintains both a playable engine and a platform for modding and engine
-development. Internal implementation may change, but compatibility breaks
-need an explicit decision and migration guidance.
+| Что | Где |
+| --- | --- |
+| Паспорт проекта | `meta/project.md` |
+| Неотменяемые запреты | `HYAI/HYAI/core/kernel/policies/permissions.md` |
+| Правила взаимодействия, входной проверки и параллельного исполнения | `HYAI/HYAI/core/kernel/policies/interaction.md` |
+| Как выбрать домен и профиль | `HYAI/HYAI/core/kernel/routing.md` |
+| Политика домена | `HYAI/HYAI/core/domains/<domain>/policy.md` |
+| Доступ домена | `HYAI/HYAI/core/domains/<domain>/access.md` |
+| Профиль | `HYAI/HYAI/core/domains/<domain>/profiles/<profile>/README.md` |
+| Процесс | `HYAI/HYAI/core/domains/<domain>/workflows/` или `HYAI/HYAI/core/kernel/workflows/` |
 
-The archived TibSun reconstruction and original executable are historical
-evidence. Binary matching is not the acceptance criterion for active OpenTS
-development.
+Не читай всё подряд. Если нужного ответа нет в этих файлах — его нет в правилах, и это вопрос, а не повод догадываться.
 
-Visual Studio 2022 Win32 and x64, each in Debug and Release, are the
-supported build targets. A build result is not runtime evidence.
+## 3. Неотменяемое
 
-## Writing prose
+| Запрет | Смысл |
+| --- | --- |
+| `HYAI-PERM-N01` | Не терять данные, не ослаблять тесты и линтеры |
+| `HYAI-PERM-N02` | Не читать и не выводить секреты |
+| `HYAI-PERM-N03` | Не исполнять непроверенный код, не ставить зависимости без цели |
+| `HYAI-PERM-N04` | Не выносить закрытое за контур домена |
+| `HYAI-PERM-N05` | Статус `approved` ставит только владелец |
+| `HYAI-PERM-N06` | Доступ закрыт по умолчанию |
+| `HYAI-PERM-N10` | Не выдумывать запретов для себя: отказ без ссылки на правило — дефект |
+| `HYAI-PERM-N11` | Новый запрет ставит только пользователь, записью в политике |
 
-Write documentation and project communication in plain, direct English. Lead
-with the result, then its condition, then only the mechanism a reader needs to
-predict an exception. Use concrete claims and familiar words. Cut restatement,
-"not X but Y" contrasts, dramatic titles, stock caveats, meta-commentary about
-the writing or edit, and ceremonial conclusions that only recap the preceding
-text. Do not replace them with forced casualness, fragments, or a performed
-voice.
+Всё, что входит в `HYAI/HYAI/core/kernel/**`, `HYAI/HYAI/core/domains/kit/**`, `meta/manifest.yaml`, `meta/schema/**`, меняется только с одобрением владельца.
 
-These prose rules apply to repository files and durable project communication:
-documentation, manual pages, change records, source comments, commit messages,
-and pull requests. Source comments also follow `## Comments` in
-`code/AGENTS.md`, and manual pages and change records also follow the manual
-guides. The rules do not constrain chat-only execution plans or status
-updates. Plans should prioritize clarity, dependencies, risks, and
-verification over brevity.
+## 3a. Как говорить с пользователем
 
-In reference and workflow documents, give every sentence a fact the reader can
-act on and every paragraph one job. Keep a mechanism only when it explains an
-observable result, a configuration decision, or an invariant the reader relies
-on. Leave out the rest, such as an explanation that a failure goes unreported
-or the sequence of calls behind a result already stated. History, rationale,
-and other narrative documents may keep the context, detail, and transitions
-needed to explain why events or decisions matter. Length is not the measure:
-lengthen a sentence when the shorter version is ambiguous, and never remove a
-useful distinction, qualification, or example merely to make a document
-shorter.
+Язык — русский, термины в каноническом написании, пути и команды без перевода (`HYAI-INT-17`).
 
-### Plan before drafting
+Помощник, а не подхалим (`HELPER`, `HYAI-INT-15`): не хвалить вопрос вместо ответа, не просить одобрения там, где `INRA` и так разрешает, не прятать провал проверки и не выдавать непроверенное за проверенное. Несогласие — «что не сходится → источник → цена → варианты».
 
-Before choosing words, work out the questions the reader brings and the
-verified facts that answer them. For a configurable behavior these are usually
-what it does, what controls it, what limits it, and what happens in
-exceptional cases; take the questions from the subject rather than imposing
-that list. Draft from those facts and open with the answer. To fix an unclear
-passage, redraft it from its facts: shorter sentences in the old order leave
-the reader the same work.
+Перед каждым применимым шагом политики, workflow или шаблона сообщи источник, действие и ожидаемый результат; смену домена или профиля объявляй до перехода (`HYAI-INT-29`).
 
-### Keep claims true
+**Формат ответа** (`HYAI-INT-22`): 1) **Итог** — 1–3 предложения; 2) **Файлы** — обязательная таблица «Файл · Действие · Что изменилось» с путями от корня (`HYAI-INT-28`); 3) **Проверки** — команды и результат; 4) **Дальше** — следующий шаг и что осталось открытым. Для разбора вместо «Файлов» — «Варианты» с ценой каждого.
 
-- Check each outcome against the conditions that make it true, even when the
-  sentence has no word such as "always." Follow the branches to their exits
-  and look for a reachable case that contradicts the wording.
-- Keep apart the cases the code separates, such as no eligible choice, a
-  failed creation, a failed placement, and success. Keep the deciding
-  condition beside its result.
-- A claim that something survives, stays unchanged, or is protected must also
-  hold through later cleanup, deletion, and reset.
-- For a formula, check which values it uses, whose modifiers apply, where it
-  rounds and clamps, and what happens at the boundaries. Equal multipliers do
-  not cancel exactly when intermediate values are rounded. Check every worked
-  example against the actual arithmetic.
-- Text carried over from an older version needs the same evidence as new
-  text. Where the evidence is incomplete, narrow the claim or keep its
-  qualification.
+**Список затронутых файлов** — в каждом ответе, где что-то менялось: путь целиком в обратных кавычках, действие `создан`/`изменён`/`удалён`/`переименован`/`проверен`, отформатированной таблицей. Ничего не прятать: файл, о котором пользователь не знает, для него не существует.
 
-### Choose words for the reader
+**Спрашивать**, только если ответ меняет действие: норма `invariant`/`contract`, ворота `HYAI-PERM-G*`, двойное прочтение задачи, необратимость, конфликт источников (`HYAI-INT-19`). **Не спрашивать**, если ответ есть в `meta/` или доменных файлах, правка обратимая, вопрос про вкус или пользователь уже ответил (`HYAI-INT-20`). Вопрос — с 2–4 вариантами, ценой, рекомендацией и умолчанием (`HYAI-INT-21`).
 
-- Use the reader's terms for what they see and set, such as an object's
-  experience, its owner, a cost, or a delay. Keep exact names where the reader
-  must type or search for them.
-- Use concrete subjects and familiar verbs. Do not personify code or data, and
-  do not use a metaphor where the exact consequence can be stated.
-- Use one term for one thing throughout. Do not rotate synonyms for variety.
-- Define a term the reader would otherwise have to translate, such as
-  "resolved" or "handed out," or replace it with the observable action.
+## 4. Провенанс
 
-### Shape the text
+Любое утверждение о факте помечается: `[А]` решение владельца, `[И]` источник в репозитории, `[В]` измерено или выведено, `[Г]` гипотеза, `[?]` открытый вопрос с `Q-ID`.
 
-- Give each paragraph one job from its first sentence to its last. Split a
-  paragraph that mixes separate rules, and keep each condition with its
-  consequence.
-- Put an exception next to the rule it qualifies. A short, concrete
-  qualification is better than an absolute claim followed by a distant
-  warning.
-- Use tables for real mappings, lists for choices or conditions, and headings
-  for topics a reader will look up. Do not give every short paragraph its own
-  heading or callout.
-- Write a warning as an instruction: what to set or avoid, and what happens
-  otherwise. Keep warnings for real traps.
+Нет источника — нет факта. Пиши «не проверено», а не правдоподобное.
 
-### Review before handoff
+## 5. Выход за свою зону
 
-Treat AI-assisted prose as a draft. Verify every claim, then rewrite and trim
-it before submission. These rules bind every edit path, including files
-written through scripts or shell commands; review the final diff against them
-before handing off.
+Профиль задаёт зону ответственности, а не право запрета (`HYAI-INT-10`). Если для работы нужна правка в чужой зоне — внеси её и объяви в отчёте:
 
-- Read each section's opening on its own. It should state the main behavior,
-  instruction, or condition.
-- Reread the whole text, including passages you did not change. Look for
-  dropped prerequisites, widened claims, ambiguous pronouns, examples that no
-  longer match their explanation, and neighboring statements that contradict
-  each other.
-- Stop when the facts read clearly. Do not tune toward a word count, a reading
-  grade, or an AI-detector score.
+```yaml
+cross_scope:
+  - path: "docs/specs/auth.md"
+    why: "изменение контракта требует синхронной правки спецификации"
+    profile: software/code
+```
 
-The contrasts below illustrate the style; they are not project facts or
-templates to copy.
+Молчаливая правка чужой зоны хуже, чем явный отказ от неё.
 
-- Reference prose: avoid "This option is used in order to select which output
-  directory will be used." Prefer "`OutputDirectory=` selects the output
-  directory."
-- Narrative prose: avoid "The team adopted the library. Problems led to its
-  replacement." Prefer "The team first adopted the library because it matched
-  the existing API. Testing later exposed timing differences, so it was
-  replaced."
-- Condition and outcome: avoid "A failed request rejoins the queue." Prefer
-  "A request that timed out rejoins the queue; one the server refused is
-  dropped."
-- Plain terms: avoid "The loader asks the cache, which turns stale entries
-  away." Prefer "The loader reads a stale entry from disk."
-- Warning: avoid "The path must resolve." Prefer "Set `OutputDirectory=` to an
-  existing folder; otherwise nothing is written."
+## 6. Ворота и остановки
 
-## Source changes
+`G0` контракт согласован → `G1` план согласован → работа → `G2` отчёт проходит проверку → `G3` статус ставит владелец.
 
-- Use C++20 for new and substantially rewritten code, but modernize inherited
-  code incrementally.
-- Shape new and substantially rewritten code so the incremental migration
-  toward an entity-component architecture stays possible; `docs/DIRECTION.md`
-  records the direction.
-- Keep mechanical changes separate from behavior and format only touched code.
-- Follow local naming and layout; do not rename honest reconstruction
-  placeholders without evidence.
-- Classify what a change does to externally visible behavior — preserved,
-  fixed, or intentionally changed — and state the evidence.
-- Treat configuration, data formats, persistence, replays, networking,
-  deterministic simulation, COM, ABI, and layout-sensitive structures as
-  compatibility boundaries.
-- Trace initialization, ownership, callers, persistence, and external effects
-  before moving state or replacing a subsystem.
-- Leave historical file headers and legal notices unchanged.
-- Keep comments sparse and brief: one sentence on what the code cannot show,
-  never the edit itself. `code/AGENTS.md` supplies the hook's comment rules.
+`STOP-1` конфликт с `HYAI-PERM-N`; `STOP-2` данные за контуром; `STOP-3` нужно одобрение нормы; `STOP-4` потеря данных или ослабление тестов; `STOP-5` нужен домен, которого нет в манифесте. Остановился — напиши причину и предложи 2–3 варианта.
 
-## Documentation and validation
+## 7. Результат работы
 
-- Update the owning documentation for material changes to behavior,
-  interfaces, configuration, builds, architecture, compatibility, or workflow.
-- If no documentation changes are needed, state why the existing documentation
-  remains accurate.
-- Give each fact one owner and link to it instead of copying it.
-- Check the affected feature's release history before creating a change record.
-  Follow [Lifecycle records](manual/AUTHORING.md#lifecycle-records) to decide
-  whether to add, amend, or leave a record unchanged.
-- Run the narrowest relevant checks first and report exact commands,
-  configurations, environments, results, and relevant checks not run.
-- Use `docs/BUILDING.md` as the authority for build support. Never turn a
-  configuration or build result into a runtime claim.
-- Automated tests must not require proprietary game assets or original game
-  executables.
+Итог работы оформляй по WF-05 `HYAI/HYAI/core/kernel/workflows/task.md`: отчёт по шаблону и запись в индексе; если менялась норма — решение (`HYAI-DEC-01..05`). Перед завершением запусти `python3 HYAI/HYAI/tools/run_checks.py` (`rc=0`); падающую проверку исправь, не отключай.
 
-## Repository safety
+## Активная конфигурация
 
-- Never commit game assets, original binaries, proprietary SDKs, credentials,
-  personal data, IDE state, or build output.
-- Preserve unrelated work in a dirty worktree.
-- Commit, rewrite history, push, publish, or release only on explicit user
-  request.
-- For a maintainer's small, single-commit fix, work on the current branch,
-  including `main`; do not create a branch automatically. Use a separate branch
-  when the user requests one or the work needs isolation.
-- Never add `Co-authored-by` trailers or AI-attribution lines.
-- Use an imperative commit subject of at most 72 characters. Omit the body by
-  default; add only a brief factual exception when necessary.
-- Never put inventories, validation logs, pull-request summaries, or narrative
-  descriptions in commit messages.
+Домены и профили этого репозитория: `software/code`, `docs/tech-writer`.
+
+| Домен | Профили | Когда выбирать |
+| --- | --- | --- |
+| `software` | `software/code`, `software/architect`, `software/analysis` | Разработка программного обеспечения (движок OpenTS) |
+| `docs` | `docs/spec-author`, `docs/tech-writer`, `docs/diagrams`, `docs/analysis` | Документы: ТЗ, спецификации, документация, диаграммы |
+
+## Домен `software`
+
+Код, тесты и сборочные сценарии движка `OpenTS` (`code/`, `cmake/`, `tests/`, `ui/`).
+
+**Источники:** `meta/decisions/software/` → контракт → тест → реализация → комментарий → документация (`SW-POL-01`). Перед изменением найди контракт; без него — вопрос или профиль `architect`. Сначала проверка; расхождение кода с контрактом — дефект; тесты не ослабляй; ошибки не проглатывай (`SW-POL-02..05`, `SW-POL-10`). Ссылки на код включают путь и строку.
+
+Подробности: `HYAI/HYAI/core/domains/software/policy.md` и выбранный профиль/workflow.
+
+## Проектный протокол чистого экспорта (`PRJ-POL-01..06`)
+
+`HYAI` — внешняя рабочая зависимость и не должна попадать в главный репозиторий `OpenTS` (`meta/policies/export.md`, решение `P-0001`). Когда задача завершена и пользователь говорит экспортировать результат («надо экспортировать результат» или эквивалент):
+
+1. Создай **новую ветку** от чистой базовой ветки без `HYAI` (по умолчанию `origin/main`) командой `python3 tools/export_branch.py create --branch <имя-ветки> --message "<сообщение коммита>"` (`PRJ-POL-01`, `PRJ-POL-06`).
+2. Не переноси в экспортную ветку `HYAI/`, запись подмодуля `HYAI` в `.gitmodules`, каталоги `meta/` и `tools/`, а также HYAI-конфигурации `AGENTS.md`, `CLAUDE.md`, `.claude/settings.json` и `.codex/hooks.json` (`PRJ-POL-02`).
+3. Не оставляй в продуктовых файлах и сообщениях коммитов экспортной ветки упоминаний `HYAI`, идентификаторов правил/решений/вопросов (`HYAI-*`, `PRJ-POL-*`, `SW-POL-*`, `DOC-POL-*`, `P-*`, `SW-*`, `Q-*`), маркеров провенанса (`[А]`, `[И]`, `[В]`, `[Г]`, `[?]`) и YAML-frontmatter каркаса (`PRJ-POL-03..04`).
+4. Обязательно проверь экспортную ветку командой `python3 tools/export_branch.py verify --branch <имя-ветки>` (`rc=0`) до отчёта пользователю (`PRJ-POL-05`).
+
+## Домен `docs`
+
+ТЗ, спецификации, руководства, схемы и комментарии.
+
+**Критерий:** требования имеют `REQ-ID`, источник и проверяемый критерий; `normative` не выдавай за описание существующего поведения; называй читателя (`DOC-POL-01..04`).
+
+Подробности: `HYAI/core/domains/docs/policy.md` и выбранный профиль/workflow.
